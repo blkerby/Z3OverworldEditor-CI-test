@@ -1,0 +1,9 @@
+[package]
+name = "Z3OverworldEditor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced = {version="0.13.1", features=["canvas"]}
+iced_aw = { version = "0.12.0", default-features = false, features = ["number_input"] }
+iced_fonts = "0.1.1"
