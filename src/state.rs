@@ -29,6 +29,16 @@ pub struct PaletteState {
     pub brush_mode: bool,
 }
 
+pub enum Dialogue {
+    AddPalette {
+        name: String,
+    },
+    RenamePalette {
+        name: String,
+    },
+    DeletePalette,
+}
+
 pub struct EditorState {
     // Tiling data:
     pub palettes: Vec<Palette>,
@@ -38,6 +48,8 @@ pub struct EditorState {
     // Editor selections:
     // screen_state: ScreenState,
     pub palette_state: PaletteState,
+
+    pub dialogue: Option<Dialogue>,
 }
 
 impl Default for EditorState {
@@ -59,6 +71,7 @@ impl Default for EditorState {
                 blue: 0,
                 brush_mode: false,
             },
+            dialogue: None,
         }
     }
 }

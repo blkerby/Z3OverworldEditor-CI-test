@@ -1,7 +1,99 @@
-use crate::{message::Message, state::EditorState};
+use crate::{common::{Color, Palette}, message::Message, state::{Dialogue, EditorState}};
 
 pub fn update(state: &mut EditorState, message: Message) {
     match message {
+        Message::SelectPalette(name) => {
+            for i in 0..state.palettes.len() {
+                if name == state.palettes[i].name {
+                    state.palette_state.palette_idx = i;
+                    break;
+                }
+            }
+        }
+        Message::AddPaletteDialogue => {
+            state.dialogue = Some(Dialogue::AddPalette { name: "".to_string() });
+        }
+        Message::SetAddPaletteName(new_name) => {
+            match &mut state.dialogue {
+                Some(Dialogue::AddPalette { name }) => {
+                    *name = new_name;
+                }
+                _ => {}
+            }
+        }
+        Message::AddPalette => {
+            match &state.dialogue {
+                Some(Dialogue::AddPalette { name }) => {
+                    if name.len() == 0 {
+                        return;
+                    }
+                    for p in state.palettes.iter() {
+                        if &p.name == name {
+                            // Don't add non-unique palette name.
+                            // TODO: display some error message.
+                            return;
+                        }
+                    }
+                    state.palettes.push(Palette {
+                        name: name.clone(),
+                        colors: [Color::default(); 16]
+                    });
+                    state.palette_state.palette_idx = state.palettes.len() - 1;
+                    state.dialogue = None;
+                }
+                _ => {}
+            }
+        }
+        Message::DeletePaletteDialogue => {
+            state.dialogue = Some(Dialogue::DeletePalette);
+        }
+        Message::DeletePalette => {
+            if state.palettes.len() == 1 {
+                // Don't delete the last palette.
+                // TODO: display some error message.
+                return;
+            }
+            if state.palette_state.palette_idx < state.palettes.len() {
+                state.palettes.remove(state.palette_state.palette_idx);
+                if state.palette_state.palette_idx == state.palettes.len() {
+                    state.palette_state.palette_idx -= 1;
+                }
+            }
+            state.dialogue = None;
+        }
+        Message::RenamePaletteDialogue => {
+            state.dialogue = Some(Dialogue::RenamePalette { name: "".to_string() });
+        }
+        Message::SetRenamePaletteName(new_name) => {
+            match &mut state.dialogue {
+                Some(Dialogue::RenamePalette { name }) => {
+                    *name = new_name;
+                }
+                _ => {}
+            }
+        }
+        Message::RenamePalette => {
+            match &state.dialogue {
+                Some(Dialogue::RenamePalette { name }) => {
+                    if name.len() == 0 {
+                        return;
+                    }
+                    for p in state.palettes.iter() {
+                        if &p.name == name {
+                            // Don't add non-unique palette name.
+                            // TODO: display some error message.
+                            return;
+                        }
+                    }
+                    state.palettes[state.palette_state.palette_idx].name = name.clone();
+                    state.dialogue = None;
+                }
+                _ => {}
+            }
+        }
+        Message::HideModal => {
+            state.dialogue = None;
+        }
         Message::ColorSelectMode => {
             state.palette_state.brush_mode = false;
         }

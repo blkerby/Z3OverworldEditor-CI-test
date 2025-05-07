@@ -1,7 +1,19 @@
-use iced::{keyboard, mouse, widget::{canvas, column, row, slider, text, text_input}};
-use iced_aw::number_input;
+use iced::{
+    advanced::graphics::text::cosmic_text::Edit,
+    keyboard, mouse,
+    widget::{
+        button, canvas, center, column, container, mouse_area, opaque, pick_list, row, slider,
+        stack, text, text_input,
+    },
+    Element, Length, Size, Theme,
+};
+use iced_aw::{menu_bar, number_input};
 
-use crate::{common::ColorIdx, message::Message, state::EditorState};
+use crate::{
+    common::ColorIdx,
+    message::Message,
+    state::{Dialogue, EditorState},
+};
 
 #[derive(Debug)]
 struct ColorBox {
@@ -32,24 +44,26 @@ impl canvas::Program<Message> for ColorBox {
             canvas::Event::Keyboard(key_event) => match key_event {
                 keyboard::Event::KeyPressed { modified_key, .. } => {
                     if modified_key == keyboard::Key::Character("b".into()) {
-                        (canvas::event::Status::Captured, Some(Message::ColorBrushMode))
+                        (
+                            canvas::event::Status::Captured,
+                            Some(Message::ColorBrushMode),
+                        )
                     } else if modified_key == keyboard::Key::Character("s".into()) {
-                        (canvas::event::Status::Captured, Some(Message::ColorSelectMode))
+                        (
+                            canvas::event::Status::Captured,
+                            Some(Message::ColorSelectMode),
+                        )
                     } else {
                         (canvas::event::Status::Ignored, None)
                     }
-                },
+                }
                 _ => (canvas::event::Status::Ignored, None),
-            }
+            },
             canvas::Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(button) => {
                     let message = match button {
-                        mouse::Button::Left => {
-                            Some(Message::ClickColor(self.color_idx))
-                        }
-                        mouse::Button::Right => {
-                            None
-                        }
+                        mouse::Button::Left => Some(Message::ClickColor(self.color_idx)),
+                        mouse::Button::Right => None,
                         _ => None,
                     };
 
@@ -65,37 +79,35 @@ impl canvas::Program<Message> for ColorBox {
         &self,
         _state: &(),
         renderer: &iced::Renderer,
-        _theme: &iced::Theme,
+        theme: &iced::Theme,
         bounds: iced::Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        // We prepare a new `Frame`
         let mut frame = canvas::Frame::new(renderer, bounds.size());
 
-        frame.fill_rectangle(
-            iced::Point { x: 0.0, y: 0.0 },
-            frame.size(),
-            iced::Color {
-                r: self.r,
-                g: self.g,
-                b: self.b,
-                a: 1.0,
-            },
-        );
-
         if self.selected {
-            frame.stroke_rectangle(
-                iced::Point { x: 0.0, y: 0.0 },
-                frame.size(),
-                canvas::stroke::Stroke {
-                    style: canvas::Style::Solid(iced::Color::from_rgb(1.0, 0.3, 1.0)),
-                    width: 6.0,
-                    ..Default::default()
-                }
-            );    
+            let border_color = if theme.extended_palette().is_dark {
+                iced::Color::WHITE
+            } else {
+                iced::Color::BLACK
+            };
+            frame.fill_rectangle(iced::Point { x: 0.0, y: 0.0 }, frame.size(), border_color);
         }
 
-        // Then, we produce the geometry
+        let thickness = 2.0;
+        let size = Size {
+            width: frame.size().width - 2.0 * thickness,
+            height: frame.size().height - 2.0 * thickness - 1.0,
+        };
+        frame.fill_rectangle(
+            iced::Point {
+                x: thickness,
+                y: thickness,
+            },
+            size,
+            iced::Color::from_rgb(self.r, self.g, self.b),
+        );
+
         vec![frame.into_geometry()]
     }
 
@@ -142,21 +154,159 @@ fn palette_view(state: &EditorState) -> iced::Element<Message> {
         iced::widget::Space::with_width(10),
         text("Blue"),
         number_input(&state.palette_state.blue, 0..=31, Message::ChangeBlue).width(rgb_width),
-    ].spacing(5).align_y(iced::alignment::Vertical::Center);
-    column![
-        colors_row,
-        rgb_row
-    ].spacing(5).into()
+    ]
+    .spacing(5)
+    .align_y(iced::alignment::Vertical::Center);
+    column![colors_row, rgb_row].spacing(5).into()
 }
 
+fn modal<'a, Message>(
+    base: impl Into<Element<'a, Message>>,
+    content: impl Into<Element<'a, Message>>,
+    on_blur: Message,
+) -> Element<'a, Message>
+where
+    Message: Clone + 'a,
+{
+    stack![
+        base.into(),
+        opaque(
+            mouse_area(center(opaque(content)).style(|_theme| {
+                container::Style {
+                    background: Some(
+                        iced::Color {
+                            a: 0.8,
+                            ..iced::Color::BLACK
+                        }
+                        .into(),
+                    ),
+                    ..container::Style::default()
+                }
+            }))
+            .on_press(on_blur)
+        )
+    ]
+    .into()
+}
+
+fn modal_background_style(theme: &Theme) -> container::Style {
+    let palette = theme.extended_palette();
+    container::Style {
+        background: Some(palette.background.base.color.into()),
+        border: iced::border::rounded(4)
+            .color(palette.background.weak.color)
+            .width(1.0),
+        // shadow: iced::Shadow::
+        ..container::Style::default()
+    }
+}
+
+fn add_palette_view(name: &String) -> Element<Message> {
+    container(
+        column![
+            text("Select a name for the new palette"),
+            text_input("", name)
+                .on_input(Message::SetAddPaletteName)
+                .on_submit(Message::AddPalette)
+                .padding(5),
+            button(text("Add palette"))
+                .style(button::success)
+                .on_press(Message::AddPalette),
+        ]
+        .spacing(10),
+    )
+    .width(300)
+    .padding(20)
+    .style(modal_background_style)
+    .into()
+}
+
+fn rename_palette_view(state: &EditorState, name: &String) -> Element<'static, Message> {
+    let idx = state.palette_state.palette_idx;
+    let old_name = &state.palettes[idx].name;
+    container(
+        column![
+            text(format!("Rename palette \"{}\"", old_name)),
+            text_input("", name)
+                .on_input(Message::SetRenamePaletteName)
+                .on_submit(Message::RenamePalette)
+                .padding(5),
+            button(text("Rename palette")).on_press(Message::RenamePalette),
+        ]
+        .spacing(10),
+    )
+    .width(300)
+    .padding(20)
+    .style(modal_background_style)
+    .into()
+}
+
+fn delete_palette_view(state: &EditorState) -> Element<Message> {
+    let idx = state.palette_state.palette_idx;
+    let name = &state.palettes[idx].name;
+    container(
+        column![
+            text(format!("Delete palette \"{}\"?", name)),
+            button(text("Delete palette"))
+                .style(button::danger)
+                .on_press(Message::DeletePalette),
+        ]
+        .spacing(10),
+    )
+    .width(300)
+    .padding(20)
+    .style(modal_background_style)
+    .into()
+}
 
 pub fn view(state: &EditorState) -> iced::Element<Message> {
-    column![
+    let palette_names: Vec<String> = state.palettes.iter().map(|x| x.name.clone()).collect();
+    let selected_palette_name = state.palettes[state.palette_state.palette_idx].name.clone();
+
+    let mut main_view: Element<Message> = column![
+        row![
+            text("Palette"),
+            pick_list(
+                palette_names,
+                Some(selected_palette_name),
+                Message::SelectPalette
+            ),
+            button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
+                .style(button::success)
+                .on_press(Message::AddPaletteDialogue),
+            button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
+                .on_press(Message::RenamePaletteDialogue),
+            button(text("\u{F5DE}").font(iced_fonts::BOOTSTRAP_FONT))
+                .style(button::danger)
+                .on_press(Message::DeletePaletteDialogue),
+        ]
+        .spacing(10)
+        .align_y(iced::alignment::Vertical::Center),
         palette_view(&state),
-        // pick_list(&state.test_options[..], Some(&state.selected_option), Message::Select),
         // text(state.selected_option.clone()).size(20),
         // button("Add option").on_press(Message::AddOption),
     ]
     .spacing(10)
-    .into()
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into();
+
+    if let Some(dialogue) = &state.dialogue {
+        match dialogue {
+            Dialogue::AddPalette { name } => {
+                main_view = modal(main_view, add_palette_view(name), Message::HideModal);
+            }
+            Dialogue::DeletePalette => {
+                main_view = modal(main_view, delete_palette_view(&state), Message::HideModal);
+            }
+            Dialogue::RenamePalette { name } => {
+                main_view = modal(
+                    main_view,
+                    rename_palette_view(&state, name),
+                    Message::HideModal,
+                );
+            }
+        }
+    }
+    main_view
 }

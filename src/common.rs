@@ -4,7 +4,7 @@ pub type PaletteIdx = u8; // Index into palette list
 pub type TileIdx = u8; // Index into palette's tile list
 pub type CollisionValue = u8; // Value representing tile's collision type
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Color {
     pub red: ColorValue,
     pub green: ColorValue,
