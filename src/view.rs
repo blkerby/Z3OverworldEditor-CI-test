@@ -1,19 +1,27 @@
+use std::path::PathBuf;
+
 use iced::{
-    advanced::graphics::text::cosmic_text::Edit,
     keyboard, mouse,
     widget::{
-        button, canvas, center, column, container, mouse_area, opaque, pick_list, row, slider,
-        stack, text, text_input,
+        button, canvas, center, column, container, mouse_area, opaque, pick_list, row, stack, text,
+        text_input, Space,
     },
     Element, Length, Size, Theme,
 };
-use iced_aw::{menu_bar, number_input};
+use iced_aw::{number_input, quad};
 
 use crate::{
-    common::ColorIdx,
     message::Message,
-    state::{Dialogue, EditorState},
+    state::{ColorIdx, Dialogue, EditorState},
 };
+
+pub async fn open_project() -> Option<PathBuf> {
+    let picked_dir = rfd::AsyncFileDialog::new()
+        .set_title("Select new or existing project folder ...")
+        .pick_folder()
+        .await;
+    picked_dir.map(|x| x.path().to_owned())
+}
 
 #[derive(Debug)]
 struct ColorBox {
@@ -126,16 +134,19 @@ impl canvas::Program<Message> for ColorBox {
 }
 
 fn palette_view(state: &EditorState) -> iced::Element<Message> {
+    let palette_names: Vec<String> = state.palettes.iter().map(|x| x.name.clone()).collect();
+    let selected_palette_name = state.palettes[state.palette_state.palette_idx].name.clone();
+
     let mut colors_row = iced::widget::Row::new();
     let pal = &state.palettes[state.palette_state.palette_idx];
     let size = 25.0;
     for i in 0..16 {
         colors_row = colors_row.push(
             canvas(ColorBox {
-                r: pal.colors[i].red as f32 / 31.0,
-                g: pal.colors[i].green as f32 / 31.0,
-                b: pal.colors[i].blue as f32 / 31.0,
-                selected: i as ColorIdx == state.palette_state.color_idx,
+                r: pal.colors[i].0 as f32 / 31.0,
+                g: pal.colors[i].1 as f32 / 31.0,
+                b: pal.colors[i].2 as f32 / 31.0,
+                selected: Some(i as ColorIdx) == state.palette_state.color_idx,
                 brush_mode: state.palette_state.brush_mode,
                 color_idx: i as ColorIdx,
             })
@@ -145,19 +156,57 @@ fn palette_view(state: &EditorState) -> iced::Element<Message> {
     }
 
     let rgb_width = 80;
-    let rgb_row = row![
-        text("Red"),
-        number_input(&state.palette_state.red, 0..=31, Message::ChangeRed).width(rgb_width),
-        iced::widget::Space::with_width(10),
-        text("Green"),
-        number_input(&state.palette_state.green, 0..=31, Message::ChangeGreen).width(rgb_width),
-        iced::widget::Space::with_width(10),
-        text("Blue"),
-        number_input(&state.palette_state.blue, 0..=31, Message::ChangeBlue).width(rgb_width),
+    let col = column![
+        row![
+            text("Palette"),
+            pick_list(
+                palette_names,
+                Some(selected_palette_name),
+                Message::SelectPalette
+            )
+            .width(200),
+            button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
+                .style(button::success)
+                .on_press(Message::AddPaletteDialogue),
+            button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
+                .on_press(Message::RenamePaletteDialogue),
+            button(text("\u{F5DE}").font(iced_fonts::BOOTSTRAP_FONT))
+                .style(button::danger)
+                .on_press(Message::DeletePaletteDialogue),
+        ]
+        .spacing(10)
+        .align_y(iced::alignment::Vertical::Center),
+        colors_row,
+        row![
+            text("Red"),
+            number_input(
+                &state.palette_state.selected_color.0,
+                0..=31,
+                Message::ChangeRed
+            )
+            .width(rgb_width),
+            iced::widget::Space::with_width(10),
+            text("Green"),
+            number_input(
+                &state.palette_state.selected_color.1,
+                0..=31,
+                Message::ChangeGreen
+            )
+            .width(rgb_width),
+            iced::widget::Space::with_width(10),
+            text("Blue"),
+            number_input(
+                &state.palette_state.selected_color.2,
+                0..=31,
+                Message::ChangeBlue
+            )
+            .width(rgb_width),
+        ]
+        .spacing(5)
+        .align_y(iced::alignment::Vertical::Center)
     ]
-    .spacing(5)
-    .align_y(iced::alignment::Vertical::Center);
-    column![colors_row, rgb_row].spacing(5).into()
+    .spacing(5);
+    row![col].padding(10).into()
 }
 
 fn modal<'a, Message>(
@@ -206,6 +255,7 @@ fn add_palette_view(name: &String) -> Element<Message> {
         column![
             text("Select a name for the new palette"),
             text_input("", name)
+                .id("AddPalette")
                 .on_input(Message::SetAddPaletteName)
                 .on_submit(Message::AddPalette)
                 .padding(5),
@@ -228,6 +278,7 @@ fn rename_palette_view(state: &EditorState, name: &String) -> Element<'static, M
         column![
             text(format!("Rename palette \"{}\"", old_name)),
             text_input("", name)
+                .id("RenamePalette")
                 .on_input(Message::SetRenamePaletteName)
                 .on_submit(Message::RenamePalette)
                 .padding(5),
@@ -247,6 +298,7 @@ fn delete_palette_view(state: &EditorState) -> Element<Message> {
     container(
         column![
             text(format!("Delete palette \"{}\"?", name)),
+            text("This will also delete all 8x8 tiles associated to this palette."),
             button(text("Delete palette"))
                 .style(button::danger)
                 .on_press(Message::DeletePalette),
@@ -259,34 +311,32 @@ fn delete_palette_view(state: &EditorState) -> Element<Message> {
     .into()
 }
 
-pub fn view(state: &EditorState) -> iced::Element<Message> {
-    let palette_names: Vec<String> = state.palettes.iter().map(|x| x.name.clone()).collect();
-    let selected_palette_name = state.palettes[state.palette_state.palette_idx].name.clone();
+fn vertical_separator() -> quad::Quad {
+    quad::Quad {
+        quad_color: iced::Color::from([0.5; 3]).into(),
+        quad_border: iced::Border {
+            radius: iced::border::Radius::new(1.0),
+            ..Default::default()
+        },
+        inner_bounds: iced_aw::widget::InnerBounds::Ratio(1.0, 1.0),
+        width: Length::Fixed(1.0),
+        ..Default::default()
+    }
+}
 
-    let mut main_view: Element<Message> = column![
-        row![
-            text("Palette"),
-            pick_list(
-                palette_names,
-                Some(selected_palette_name),
-                Message::SelectPalette
-            ),
-            button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
-                .style(button::success)
-                .on_press(Message::AddPaletteDialogue),
-            button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
-                .on_press(Message::RenamePaletteDialogue),
-            button(text("\u{F5DE}").font(iced_fonts::BOOTSTRAP_FONT))
-                .style(button::danger)
-                .on_press(Message::DeletePaletteDialogue),
-        ]
-        .spacing(10)
-        .align_y(iced::alignment::Vertical::Center),
+pub fn screen_view(_state: &EditorState) -> iced::Element<Message> {
+    Space::with_width(Length::Fill).into()
+}
+
+pub fn view(state: &EditorState) -> iced::Element<Message> {
+    let mut main_view: Element<Message> = row![
+        screen_view(&state),
+        vertical_separator(),
         palette_view(&state),
         // text(state.selected_option.clone()).size(20),
         // button("Add option").on_press(Message::AddOption),
     ]
-    .spacing(10)
+    .spacing(0)
     .width(Length::Fill)
     .height(Length::Fill)
     .into();

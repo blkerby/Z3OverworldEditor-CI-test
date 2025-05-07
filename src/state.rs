@@ -1,4 +1,38 @@
-use crate::common::{Color, ColorIdx, ColorValue, Palette};
+use anyhow::{Context, Result};
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use crate::persist;
+
+pub type ColorValue = u8; // Color value (0-31)
+pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
+                        // pub type PaletteIdx = u8; // Index into palette list
+                        // pub type TileIdx = u8; // Index into palette's tile list
+                        // pub type CollisionValue = u8; // Value representing tile's collision type
+
+// pub struct Tile {
+//     pub palette: PaletteIdx,
+//     pub collision: CollisionValue,
+//     pub pixels: [[ColorIdx; 8]; 8],
+// }
+pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct Palette {
+    #[serde(skip_serializing, skip_deserializing)]
+    pub modified: bool,
+    pub name: String,
+    pub colors: [ColorRGB; 16],
+    // pub tiles: Vec<[[ColorIdx; 8]; 8]>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct GlobalConfig {
+    #[serde(skip_serializing, skip_deserializing)]
+    pub modified: bool,
+    pub project_dir: Option<PathBuf>,
+}
 
 // struct Screen {
 //     theme: String,
@@ -22,56 +56,57 @@ use crate::common::{Color, ColorIdx, ColorValue, Palette};
 #[derive(Default)]
 pub struct PaletteState {
     pub palette_idx: usize,
-    pub color_idx: ColorIdx,
-    pub red: ColorValue,
-    pub green: ColorValue,
-    pub blue: ColorValue,
+    pub color_idx: Option<ColorIdx>,
+    pub selected_color: ColorRGB,
     pub brush_mode: bool,
 }
 
 pub enum Dialogue {
-    AddPalette {
-        name: String,
-    },
-    RenamePalette {
-        name: String,
-    },
+    AddPalette { name: String },
+    RenamePalette { name: String },
     DeletePalette,
 }
 
 pub struct EditorState {
-    // Tiling data:
+    pub global_config_path: PathBuf,
+    pub global_config: GlobalConfig,
+
+    // Project data:
     pub palettes: Vec<Palette>,
-    // tiles: Vec<Tile>,
     // screens: Vec<Screen>,
 
-    // Editor selections:
+    // Temporary editor state:
     // screen_state: ScreenState,
     pub palette_state: PaletteState,
-
     pub dialogue: Option<Dialogue>,
 }
 
-impl Default for EditorState {
-    fn default() -> Self {
-        EditorState {
-            palettes: vec![Palette {
-                name: "Default".to_string(),
-                colors: [Color {
-                    red: 0,
-                    green: 0,
-                    blue: 0,
-                }; 16],
-            }],
-            palette_state: PaletteState {
-                palette_idx: 0,
-                color_idx: 0,
-                red: 0,
-                green: 0,
-                blue: 0,
-                brush_mode: false,
-            },
-            dialogue: None,
-        }
-    }
+fn get_global_config_path() -> Result<PathBuf> {
+    let project_dirs = directories::ProjectDirs::from("", "", "Z3OverworldEditor")
+        .context("Unable to open global config directory.")?;
+    let config_dir = project_dirs.config_dir();
+    let config_path = config_dir.join("config.json");
+    Ok(config_path)
+}
+
+pub fn get_initial_state() -> Result<EditorState> {
+    let mut editor_state = EditorState {
+        global_config_path: get_global_config_path()?,
+        global_config: GlobalConfig::default(),
+        palettes: vec![Palette {
+            modified: false,
+            name: "Default".to_string(),
+            colors: [(0, 0, 0); 16],
+        }],
+        palette_state: PaletteState {
+            palette_idx: 0,
+            color_idx: None,
+            selected_color: (0, 0, 0),
+            brush_mode: false,
+        },
+        dialogue: None,
+    };
+    persist::load_global_config(&mut editor_state)?;
+    persist::load_project(&mut editor_state)?;
+    Ok(editor_state)
 }
