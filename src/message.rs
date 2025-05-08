@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::state::{ColorIdx, ColorValue, TileIdx};
+use crate::state::{ColorIdx, ColorValue, PixelCoord, TileIdx};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -25,4 +25,5 @@ pub enum Message {
     AddTileRow,
     DeleteTileRow,
     ClickTile(TileIdx),
+    ClickPixel(PixelCoord, PixelCoord),
 }

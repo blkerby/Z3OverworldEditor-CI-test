@@ -1,8 +1,10 @@
 mod palette;
 mod tiles;
+mod graphics;
 
 use std::path::PathBuf;
 
+use graphics::graphics_view;
 use iced::{
     widget::{
         center, column, container, mouse_area, opaque, row, stack,
@@ -92,6 +94,7 @@ pub fn view(state: &EditorState) -> Element<Message> {
         vertical_separator(),
         column![
             palette_view(&state),
+            graphics_view(&state),
             tile_view(&state),
         ]
     ]

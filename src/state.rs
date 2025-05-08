@@ -9,6 +9,7 @@ use crate::persist;
 pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
 pub type TileIdx = u16; // Index into palette's tile list
+pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
 
@@ -72,6 +73,9 @@ pub struct EditorState {
     // Tile editing state:
     pub tile_idx: Option<TileIdx>,
 
+    // Graphics editing state:
+    pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
+
     // Other editor state:
     pub dialogue: Option<Dialogue>,
 }
@@ -94,6 +98,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         color_idx: None,
         selected_color: (0, 0, 0),
         tile_idx: None,
+        pixel_coords: None,
         dialogue: None,
     };
     match persist::load_global_config(&mut editor_state) {

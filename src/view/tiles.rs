@@ -1,7 +1,9 @@
 use iced::{
-    mouse,
-    widget::{button, canvas, column, row, stack, text},
-    Element, Point, Rectangle, Size,
+    mouse, widget::{
+        button, canvas, column, row,
+        scrollable::{Direction, Scrollbar},
+        stack, text, Scrollable,
+    }, Element, Length, Point, Rectangle, Size
 };
 use log::info;
 
@@ -41,9 +43,11 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                     let message = match button {
                         mouse::Button::Left => {
                             if let Some(p) = cursor.position_in(bounds) {
-                                info!("p: {:?}", p);
                                 let y = ((p.y - 1.0) / (self.pixel_size * 8.0)) as i32;
                                 let x = ((p.x - 1.0) / (self.pixel_size * 8.0)) as i32;
+                                if x < 0 || x >= 16 {
+                                    return (canvas::event::Status::Ignored, None);
+                                }
                                 let i = y * 16 + x;
                                 if i >= 0 && i < self.palette.tiles.len() as i32 {
                                     Some(Message::ClickTile(i as TileIdx))
@@ -114,7 +118,9 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
             (num_cols * 8) as u32,
             (num_rows * 8) as u32,
             data,
-        )).filter_method(iced::widget::image::FilterMethod::Nearest).snap(true);
+        ))
+        .filter_method(iced::widget::image::FilterMethod::Nearest)
+        .snap(true);
 
         frame.draw_image(
             Rectangle::new(
@@ -186,8 +192,8 @@ impl canvas::Program<Message> for TileSelect {
                     width: thickness,
                     style: border_color.into(),
                     ..Default::default()
-                }
-            );            
+                },
+            );
         }
         vec![frame.into_geometry()]
     }
@@ -206,8 +212,10 @@ impl canvas::Program<Message> for TileSelect {
     // }
 }
 
-
 pub fn tile_view(state: &EditorState) -> Element<Message> {
+    let num_cols = 16;
+    let num_rows = (state.palettes[state.palette_idx].tiles.len() + num_cols - 1) / num_cols;
+
     let col = column![
         row![
             text("Tiles"),
@@ -220,101 +228,30 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
         ]
         .spacing(10)
         .align_y(iced::alignment::Vertical::Center),
-        stack![
-            canvas(TileGrid {
-                palette: &state.palettes[state.palette_idx],
-                pixel_size: 3.0,
-                thickness: 1.0,
-            }).width(384 + 2).height(384 + 2),
-            canvas(TileSelect {
-                tile_idx: state.tile_idx,
-                pixel_size: 3.0,
-                thickness: 1.0,
-            }).width(384 + 2).height(384 + 2)
-        ]
-    ].spacing(5);
+        Scrollable::with_direction(
+            column![
+                stack![
+                    canvas(TileGrid {
+                        palette: &state.palettes[state.palette_idx],
+                        pixel_size: 3.0,
+                        thickness: 1.0,
+                    })
+                    .width(384 + 2)
+                    .height((num_rows * 8 * 3 + 4) as f32),
+                    canvas(TileSelect {
+                        tile_idx: state.tile_idx,
+                        pixel_size: 3.0,
+                        thickness: 1.0,
+                    })
+                    .width(384 + 2)
+                    .height((num_rows * 8 * 3 + 4) as f32)
+                ],    
+            ],
+            Direction::Vertical(Scrollbar::default())
+        )
+        .width(400)
+        .height(Length::Fill),
+    ]
+    .spacing(5);
     row![col].padding(10).into()
 }
-
-// pub fn palette_view(state: &EditorState) -> Element<Message> {
-//     let palette_names: Vec<String> = state.palettes.iter().map(|x| x.name.clone()).collect();
-//     let selected_palette_name = state.palettes[state.palette_idx].name.clone();
-
-//     let mut colors_row = iced::widget::Row::new();
-//     let pal = &state.palettes[state.palette_idx];
-//     let size = 25.0;
-//     for i in 0..16 {
-//         colors_row = colors_row.push(
-//             canvas(ColorBox {
-//                 r: pal.colors[i].0 as f32 / 31.0,
-//                 g: pal.colors[i].1 as f32 / 31.0,
-//                 b: pal.colors[i].2 as f32 / 31.0,
-//                 selected: Some(i as ColorIdx) == state.color_idx,
-//                 exists_selection: state.color_idx.is_some(),
-//                 brush_mode: state.brush_mode,
-//                 color_idx: i as ColorIdx,
-//             })
-//             .width(size)
-//             .height(size),
-//         );
-//     }
-
-//     let rgb_width = 80;
-//     let mut col = column![
-//         row![
-//             text("Palette"),
-//             pick_list(
-//                 palette_names,
-//                 Some(selected_palette_name),
-//                 Message::SelectPalette
-//             )
-//             .width(200),
-//             button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
-//                 .style(button::success)
-//                 .on_press(Message::AddPaletteDialogue),
-//             button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
-//                 .on_press(Message::RenamePaletteDialogue),
-//             button(text("\u{F5DE}").font(iced_fonts::BOOTSTRAP_FONT))
-//                 .style(button::danger)
-//                 .on_press(Message::DeletePaletteDialogue),
-//         ]
-//         .spacing(10)
-//         .align_y(iced::alignment::Vertical::Center),
-//         colors_row,
-//     ]
-//     .spacing(5);
-
-//     if state.color_idx.is_some() {
-//         col = col.push(
-//             row![
-//                 text("Red"),
-//                 number_input(
-//                     &state.selected_color.0,
-//                     0..=31,
-//                     Message::ChangeRed
-//                 )
-//                 .width(rgb_width),
-//                 iced::widget::Space::with_width(10),
-//                 text("Green"),
-//                 number_input(
-//                     &state.selected_color.1,
-//                     0..=31,
-//                     Message::ChangeGreen
-//                 )
-//                 .width(rgb_width),
-//                 iced::widget::Space::with_width(10),
-//                 text("Blue"),
-//                 number_input(
-//                     &state.selected_color.2,
-//                     0..=31,
-//                     Message::ChangeBlue
-//                 )
-//                 .width(rgb_width),
-//             ]
-//             .spacing(5)
-//             .align_y(iced::alignment::Vertical::Center),
-//         );
-//     }
-
-//     row![col].padding(10).into()
-// }

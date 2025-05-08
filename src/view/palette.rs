@@ -11,7 +11,6 @@ struct ColorBox {
     g: f32,
     b: f32,
     selected: bool,
-    exists_selection: bool,
     brush_mode: bool,
     color_idx: ColorIdx,
 }
@@ -102,7 +101,7 @@ impl canvas::Program<Message> for ColorBox {
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if self.brush_mode && cursor.is_over(bounds) && self.exists_selection {
+        if self.brush_mode && cursor.is_over(bounds) {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::default()
@@ -124,7 +123,6 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
                 g: pal.colors[i].1 as f32 / 31.0,
                 b: pal.colors[i].2 as f32 / 31.0,
                 selected: Some(i as ColorIdx) == state.color_idx,
-                exists_selection: state.color_idx.is_some(),
                 brush_mode: state.brush_mode,
                 color_idx: i as ColorIdx,
             })

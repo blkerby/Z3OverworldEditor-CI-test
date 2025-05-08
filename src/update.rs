@@ -148,6 +148,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             for i in 0..state.palettes.len() {
                 if name == state.palettes[i].name {
                     state.palette_idx = i;
+                    state.color_idx = None;
                     break;
                 }
             }
@@ -262,7 +263,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::ClickColor(idx) => {
             let pal_idx = state.palette_idx;
-            if state.brush_mode && state.color_idx.is_some() {
+            if state.brush_mode {
                 state.palettes[pal_idx].colors[idx as usize] = state.selected_color;
                 state.palettes[pal_idx].modified = true;
             } else {
@@ -318,6 +319,23 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::ClickTile(idx) => {
             state.tile_idx = Some(idx);
+            state.pixel_coords = None;
+        }
+        Message::ClickPixel(x, y) => {
+            state.pixel_coords = Some((x, y));
+            if let Some(tile_idx) = state.tile_idx {
+                let pal = &mut state.palettes[state.palette_idx];
+                if state.brush_mode {
+                    if let Some(color_idx) = state.color_idx {
+                        pal.tiles[tile_idx as usize][y as usize][x as usize] = color_idx;
+                        pal.modified = true;
+                    }
+                } else {
+                    let color_idx = pal.tiles[tile_idx as usize][y as usize][x as usize];
+                    state.color_idx = Some(color_idx);
+                    state.selected_color = pal.colors[color_idx as usize];
+                }
+            }
         }
     }
     Task::none()
