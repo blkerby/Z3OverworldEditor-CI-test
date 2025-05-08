@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use log::info;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -7,24 +8,17 @@ use crate::persist;
 
 pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
-                        // pub type PaletteIdx = u8; // Index into palette list
-                        // pub type TileIdx = u8; // Index into palette's tile list
-                        // pub type CollisionValue = u8; // Value representing tile's collision type
+pub type TileIdx = u16; // Index into palette's tile list
 
-// pub struct Tile {
-//     pub palette: PaletteIdx,
-//     pub collision: CollisionValue,
-//     pub pixels: [[ColorIdx; 8]; 8],
-// }
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Palette {
     #[serde(skip_serializing, skip_deserializing)]
     pub modified: bool,
     pub name: String,
     pub colors: [ColorRGB; 16],
-    // pub tiles: Vec<[[ColorIdx; 8]; 8]>,
+    pub tiles: Vec<[[ColorIdx; 8]; 8]>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -53,14 +47,6 @@ pub struct GlobalConfig {
 //     selected_screen_idx: usize,
 // }
 
-#[derive(Default)]
-pub struct PaletteState {
-    pub palette_idx: usize,
-    pub color_idx: Option<ColorIdx>,
-    pub selected_color: ColorRGB,
-    pub brush_mode: bool,
-}
-
 pub enum Dialogue {
     AddPalette { name: String },
     RenamePalette { name: String },
@@ -75,9 +61,18 @@ pub struct EditorState {
     pub palettes: Vec<Palette>,
     // screens: Vec<Screen>,
 
-    // Temporary editor state:
-    // screen_state: ScreenState,
-    pub palette_state: PaletteState,
+    // General editing state:
+    pub brush_mode: bool,
+    
+    // Palette editing state:
+    pub palette_idx: usize,
+    pub color_idx: Option<ColorIdx>,
+    pub selected_color: ColorRGB,
+
+    // Tile editing state:
+    pub tile_idx: Option<TileIdx>,
+
+    // Other editor state:
     pub dialogue: Option<Dialogue>,
 }
 
@@ -93,20 +88,21 @@ pub fn get_initial_state() -> Result<EditorState> {
     let mut editor_state = EditorState {
         global_config_path: get_global_config_path()?,
         global_config: GlobalConfig::default(),
-        palettes: vec![Palette {
-            modified: false,
-            name: "Default".to_string(),
-            colors: [(0, 0, 0); 16],
-        }],
-        palette_state: PaletteState {
-            palette_idx: 0,
-            color_idx: None,
-            selected_color: (0, 0, 0),
-            brush_mode: false,
-        },
+        palettes: vec![],
+        brush_mode: false,
+        palette_idx: 0,
+        color_idx: None,
+        selected_color: (0, 0, 0),
+        tile_idx: None,
         dialogue: None,
     };
-    persist::load_global_config(&mut editor_state)?;
-    persist::load_project(&mut editor_state)?;
+    match persist::load_global_config(&mut editor_state) {
+        Ok(_) => {
+            persist::load_project(&mut editor_state)?;
+        }
+        Err(err) => {
+            info!("Unable to load global config, using default: {}", err);
+        }
+    }
     Ok(editor_state)
 }

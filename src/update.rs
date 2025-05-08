@@ -2,12 +2,12 @@ use iced::{
     keyboard::{self, key},
     widget, window, Event, Task,
 };
-use log::{error, info};
+use log::{error, info, warn};
 
 use crate::{
     message::Message,
     persist::{self, delete_palette},
-    state::{Dialogue, EditorState, Palette},
+    state::{Dialogue, EditorState, TileIdx},
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
@@ -28,7 +28,75 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 key: keyboard::Key::Named(key::Named::Escape),
                 ..
             }) => {
+                state.brush_mode = false;
                 state.dialogue = None;
+                state.color_idx = None;
+                state.tile_idx = None;
+            }
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(key::Named::ArrowRight),
+                ..
+            }) => {
+                if let Some(idx) = state.color_idx {
+                    if idx < 15 {
+                        let new_idx = idx + 1;
+                        state.color_idx = Some(new_idx);
+                        state.selected_color =
+                            state.palettes[state.palette_idx].colors[new_idx as usize];
+                    }
+                } else if let Some(idx) = state.tile_idx {
+                    if (idx as usize) + 1 < state.palettes[state.palette_idx].tiles.len() {
+                        let new_idx = idx + 1;
+                        state.tile_idx = Some(new_idx);
+                    }
+                }
+            }
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(key::Named::ArrowLeft),
+                ..
+            }) => {
+                if let Some(idx) = state.color_idx {
+                    if idx > 0 {
+                        let new_idx = idx - 1;
+                        state.color_idx = Some(new_idx);
+                        state.selected_color =
+                            state.palettes[state.palette_idx].colors[new_idx as usize];
+                    }
+                } else if let Some(idx) = state.tile_idx {
+                    if idx > 0 {
+                        let new_idx = idx - 1;
+                        state.tile_idx = Some(new_idx);
+                    }
+                }
+            }
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(key::Named::ArrowDown),
+                ..
+            }) => {
+                if let Some(idx) = state.tile_idx {
+                    if (idx as usize) + 16 < state.palettes[state.palette_idx].tiles.len() {
+                        let new_idx = idx + 16;
+                        state.tile_idx = Some(new_idx);
+                    }
+                }
+            }
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(key::Named::ArrowUp),
+                ..
+            }) => {
+                if let Some(idx) = state.tile_idx {
+                    if (idx as usize) >= 16 {
+                        let new_idx = idx - 16;
+                        state.tile_idx = Some(new_idx);
+                    }
+                }
+            }
+            Event::Keyboard(keyboard::Event::KeyPressed { modified_key, .. }) => {
+                if modified_key == keyboard::Key::Character("b".into()) {
+                    state.brush_mode = true;
+                } else if modified_key == keyboard::Key::Character("s".into()) {
+                    state.brush_mode = false;
+                }
             }
             _ => {}
         },
@@ -79,7 +147,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::SelectPalette(name) => {
             for i in 0..state.palettes.len() {
                 if name == state.palettes[i].name {
-                    state.palette_state.palette_idx = i;
+                    state.palette_idx = i;
                     break;
                 }
             }
@@ -100,25 +168,21 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             match &state.dialogue {
                 Some(Dialogue::AddPalette { name }) => {
                     if name.len() == 0 {
+                        warn!("Empty palette name is invalid.");
                         return Task::none();
                     }
                     for p in state.palettes.iter() {
                         if &p.name == name {
                             // Don't add non-unique palette name.
-                            // TODO: display some error message.
+                            warn!("Palette name {} already exists.", name);
                             return Task::none();
                         }
                     }
-                    let mut pal = Palette {
-                        modified: false,
-                        name: name.clone(),
-                        colors: state.palettes[state.palette_state.palette_idx]
-                            .colors
-                            .clone(),
-                    };
+                    let mut pal = state.palettes[state.palette_idx].clone();
+                    pal.name = name.clone();
                     pal.modified = true;
                     state.palettes.push(pal);
-                    state.palette_state.palette_idx = state.palettes.len() - 1;
+                    state.palette_idx = state.palettes.len() - 1;
                     update_palette_order(state);
                     state.dialogue = None;
                 }
@@ -141,20 +205,21 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             match &state.dialogue {
                 Some(Dialogue::RenamePalette { name }) => {
                     if name.len() == 0 {
-                        error!("Empty palette name is invalid.");
+                        warn!("Empty palette name is invalid.");
                         return Task::none();
                     }
                     for p in state.palettes.iter() {
                         if &p.name == name {
                             // Don't add non-unique palette name.
-                            error!("Palette name {} already exists.", name);
+                            warn!("Palette name {} already exists.", name);
                             return Task::none();
                         }
                     }
 
                     let name = name.clone();
-                    let old_name = state.palettes[state.palette_state.palette_idx].name.clone();
-                    state.palettes[state.palette_state.palette_idx].name = name.clone();
+                    let old_name = state.palettes[state.palette_idx].name.clone();
+                    state.palettes[state.palette_idx].name = name.clone();
+                    state.palettes[state.palette_idx].modified = true;
                     if let Err(e) = persist::save_project(state) {
                         error!("Error saving project: {}\n{}", e, e.backtrace());
                         return Task::none();
@@ -175,19 +240,18 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::DeletePalette => {
             if state.palettes.len() == 1 {
-                // Don't delete the last palette.
-                // TODO: display some error message.
+                warn!("Not allowed to delete the last palette.");
                 return Task::none();
             }
 
-            let name = state.palettes[state.palette_state.palette_idx].name.clone();
+            let name = state.palettes[state.palette_idx].name.clone();
             if let Err(e) = persist::delete_palette(state, &name) {
                 error!("Error deleting palette file: {}\n{}", e, e.backtrace());
             }
-            if state.palette_state.palette_idx < state.palettes.len() {
-                state.palettes.remove(state.palette_state.palette_idx);
-                if state.palette_state.palette_idx == state.palettes.len() {
-                    state.palette_state.palette_idx -= 1;
+            if state.palette_idx < state.palettes.len() {
+                state.palettes.remove(state.palette_idx);
+                if state.palette_idx == state.palettes.len() {
+                    state.palette_idx -= 1;
                 }
             }
             update_palette_order(state);
@@ -196,56 +260,75 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::HideModal => {
             state.dialogue = None;
         }
-        Message::ColorSelectMode => {
-            state.palette_state.brush_mode = false;
-        }
-        Message::ColorBrushMode => {
-            state.palette_state.brush_mode = true;
-        }
         Message::ClickColor(idx) => {
-            let pal_idx = state.palette_state.palette_idx;
-            if state.palette_state.brush_mode {
-                state.palettes[pal_idx].colors[idx as usize] = state.palette_state.selected_color;
+            let pal_idx = state.palette_idx;
+            if state.brush_mode && state.color_idx.is_some() {
+                state.palettes[pal_idx].colors[idx as usize] = state.selected_color;
                 state.palettes[pal_idx].modified = true;
             } else {
-                state.palette_state.color_idx = Some(idx);
-                state.palette_state.selected_color = state.palettes[pal_idx].colors[idx as usize];
+                state.color_idx = Some(idx);
+                state.selected_color = state.palettes[pal_idx].colors[idx as usize];
             }
         }
         Message::ChangeRed(c) => {
-            if let Some(color_idx) = state.palette_state.color_idx {
-                let pal_idx = state.palette_state.palette_idx;
-                state.palette_state.selected_color.0 = c;
+            if let Some(color_idx) = state.color_idx {
+                let pal_idx = state.palette_idx;
+                state.selected_color.0 = c;
                 state.palettes[pal_idx].colors[color_idx as usize].0 = c;
                 state.palettes[pal_idx].modified = true;
             }
         }
         Message::ChangeGreen(c) => {
-            if let Some(color_idx) = state.palette_state.color_idx {
-                let pal_idx = state.palette_state.palette_idx;
-                state.palette_state.selected_color.1 = c;
+            if let Some(color_idx) = state.color_idx {
+                let pal_idx = state.palette_idx;
+                state.selected_color.1 = c;
                 state.palettes[pal_idx].colors[color_idx as usize].1 = c;
                 state.palettes[pal_idx].modified = true;
             }
         }
         Message::ChangeBlue(c) => {
-            if let Some(color_idx) = state.palette_state.color_idx {
-                let pal_idx = state.palette_state.palette_idx;
-                state.palette_state.selected_color.2 = c;
+            if let Some(color_idx) = state.color_idx {
+                let pal_idx = state.palette_idx;
+                state.selected_color.2 = c;
                 state.palettes[pal_idx].colors[color_idx as usize].2 = c;
                 state.palettes[pal_idx].modified = true;
             }
+        }
+        Message::AddTileRow => {
+            state.palettes[state.palette_idx]
+                .tiles
+                .extend(vec![[[0; 8]; 8]; 16]);
+            state.palettes[state.palette_idx].modified = true;
+        }
+        Message::DeleteTileRow => {
+            if state.palettes[state.palette_idx].tiles.len() <= 16 {
+                warn!("Not allowed to delete the last row of tiles.");
+                return Task::none();
+            }
+            let new_size = state.palettes[state.palette_idx].tiles.len() - 16;
+            state.palettes[state.palette_idx]
+                .tiles
+                .resize(new_size, [[0; 8]; 8]);
+            if let Some(idx) = state.tile_idx {
+                if idx >= new_size as TileIdx {
+                    state.tile_idx = Some(new_size as TileIdx - 1);
+                }
+            }
+            state.palettes[state.palette_idx].modified = true;
+        }
+        Message::ClickTile(idx) => {
+            state.tile_idx = Some(idx);
         }
     }
     Task::none()
 }
 
 fn update_palette_order(state: &mut EditorState) {
-    let name = state.palettes[state.palette_state.palette_idx].name.clone();
+    let name = state.palettes[state.palette_idx].name.clone();
     state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
     for i in 0..state.palettes.len() {
         if state.palettes[i].name == name {
-            state.palette_state.palette_idx = i;
+            state.palette_idx = i;
             break;
         }
     }

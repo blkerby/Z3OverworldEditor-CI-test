@@ -77,6 +77,11 @@ fn load_palettes(state: &mut EditorState) -> Result<()> {
         let pal: Palette = load_json(&path)?;
         state.palettes.push(pal);
     }
+    if state.palettes.len() == 0 {
+        let mut pal = Palette::default();
+        pal.name = "Default".to_string();
+        state.palettes.push(pal);
+    }
     state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
     Ok(())
 }
@@ -89,12 +94,24 @@ pub fn delete_palette(state: &mut EditorState, name: &str) -> Result<()> {
     Ok(())
 }
 
+fn load_tiles(state: &mut EditorState) -> Result<()> {
+    let tiles = &mut state.palettes[state.palette_idx].tiles;
+    if tiles.len() == 0 {
+        tiles.extend(vec![[[0; 8]; 8]; 16]);
+    }
+    Ok(())
+}
+
 pub fn save_project(state: &mut EditorState) -> Result<()> {
+    if state.global_config.project_dir.is_none() {
+        return Ok(());
+    }
     save_palettes(state)?;
     Ok(())
 }
 
 pub fn load_project(state: &mut EditorState) -> Result<()> {
     load_palettes(state)?;
+    load_tiles(state)?;
     Ok(())
 }

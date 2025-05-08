@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::state::{ColorIdx, ColorValue};
+use crate::state::{ColorIdx, ColorValue, TileIdx};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -18,10 +18,11 @@ pub enum Message {
     SetRenamePaletteName(String),
     RenamePalette,
     HideModal,
-    ColorSelectMode,
-    ColorBrushMode,
     ClickColor(ColorIdx),
     ChangeRed(ColorValue),
     ChangeGreen(ColorValue),
     ChangeBlue(ColorValue),
+    AddTileRow,
+    DeleteTileRow,
+    ClickTile(TileIdx),
 }
