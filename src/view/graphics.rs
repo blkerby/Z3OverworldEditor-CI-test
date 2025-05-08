@@ -1,20 +1,18 @@
 use iced::{
     mouse,
-    widget::{button, canvas, column, container, pick_list, row, text, text_input, Column},
-    Alignment, Element, Length, Size,
+    widget::{canvas, Column},
+    Element, Size,
 };
-use iced_aw::number_input;
-use log::info;
 
 use crate::{
     message::Message,
-    state::{ColorIdx, ColorRGB, EditorState, PixelCoord},
+    state::{ColorRGB, EditorState, PixelCoord, Tile},
 };
 
 #[derive(Debug)]
 struct GraphicsBox {
     colors: [ColorRGB; 16],
-    tile: [[ColorIdx; 8]; 8],
+    tile: Tile,
     pixel_coords: Option<(PixelCoord, PixelCoord)>,
     pixel_size: f32,
     thickness: f32,

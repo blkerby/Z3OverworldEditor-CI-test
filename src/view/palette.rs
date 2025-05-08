@@ -34,7 +34,9 @@ impl canvas::Program<Message> for ColorBox {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(button) => {
                     let message = match button {
-                        mouse::Button::Left => Some(Message::ClickColor(self.color_idx)),
+                        mouse::Button::Left => {
+                            Some(Message::ClickColor(self.color_idx))
+                        }
                         mouse::Button::Right => None,
                         _ => None,
                     };

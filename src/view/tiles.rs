@@ -5,7 +5,6 @@ use iced::{
         stack, text, Scrollable,
     }, Element, Length, Point, Rectangle, Size
 };
-use log::info;
 
 use crate::{
     message::Message,
@@ -20,59 +19,70 @@ struct TileGrid<'a> {
     palette: &'a Palette,
     pixel_size: f32,
     thickness: f32,
+    brush_mode: bool,
+}
+
+#[derive(Default)]
+struct InternalState {
+    clicking: bool,
 }
 
 impl<'a> canvas::Program<Message> for TileGrid<'a> {
     // No internal state
-    type State = ();
+    type State = InternalState;
 
     fn update(
         &self,
-        _state: &mut Self::State,
+        state: &mut Self::State,
         event: canvas::Event,
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> (canvas::event::Status, Option<Message>) {
-        if cursor.position_in(bounds).is_none() {
+        let Some(p) = cursor.position_in(bounds) else {
             return (canvas::event::Status::Ignored, None);
         };
 
+        let mut click: bool = false;
         match event {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
-                mouse::Event::ButtonPressed(button) => {
-                    let message = match button {
-                        mouse::Button::Left => {
-                            if let Some(p) = cursor.position_in(bounds) {
-                                let y = ((p.y - 1.0) / (self.pixel_size * 8.0)) as i32;
-                                let x = ((p.x - 1.0) / (self.pixel_size * 8.0)) as i32;
-                                if x < 0 || x >= 16 {
-                                    return (canvas::event::Status::Ignored, None);
-                                }
-                                let i = y * 16 + x;
-                                if i >= 0 && i < self.palette.tiles.len() as i32 {
-                                    Some(Message::ClickTile(i as TileIdx))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
-                        }
-                        mouse::Button::Right => None,
-                        _ => None,
-                    };
-
-                    (canvas::event::Status::Captured, message)
+                mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                    state.clicking = true;
+                    click = true;
                 }
-                _ => (canvas::event::Status::Ignored, None),
+                mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                    state.clicking = false;
+                }
+                mouse::Event::CursorMoved { .. } => {
+                    if state.clicking {
+                        click = true;
+                    }
+                }
+                mouse::Event::CursorLeft => {
+                    state.clicking = false;
+                }
+                _ => {}
             },
-            _ => (canvas::event::Status::Ignored, None),
+            _ => {}
         }
+
+        if click {
+            let y = ((p.y - 1.0) / (self.pixel_size * 8.0)) as i32;
+            let x = ((p.x - 1.0) / (self.pixel_size * 8.0)) as i32;
+            if x < 0 || x >= 16 {
+                return (canvas::event::Status::Ignored, None);
+            }
+            let i = y * 16 + x;
+            if i >= 0 && i < self.palette.tiles.len() as i32 {
+                let message = Some(Message::ClickTile(i as TileIdx));
+                return (canvas::event::Status::Captured, message);
+            }
+        }
+        (canvas::event::Status::Ignored, None)
     }
 
     fn draw(
         &self,
-        _state: &(),
+        _state: &InternalState,
         renderer: &iced::Renderer,
         _theme: &iced::Theme,
         bounds: iced::Rectangle,
@@ -136,18 +146,18 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
         vec![frame.into_geometry()]
     }
 
-    // fn mouse_interaction(
-    //     &self,
-    //     _interaction: &Self::State,
-    //     bounds: iced::Rectangle,
-    //     cursor: mouse::Cursor,
-    // ) -> mouse::Interaction {
-    //     // if self.brush_mode && cursor.is_over(bounds) && self.exists_selection {
-    //     //     mouse::Interaction::Crosshair
-    //     // } else {
-    //     //     mouse::Interaction::default()
-    //     // }
-    // }
+    fn mouse_interaction(
+        &self,
+        _interaction: &Self::State,
+        bounds: iced::Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if self.brush_mode && cursor.is_over(bounds) {
+            mouse::Interaction::Crosshair
+        } else {
+            mouse::Interaction::default()
+        }
+    }
 }
 
 struct TileSelect {
@@ -235,6 +245,7 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
                         palette: &state.palettes[state.palette_idx],
                         pixel_size: 3.0,
                         thickness: 1.0,
+                        brush_mode: state.brush_mode,
                     })
                     .width(384 + 2)
                     .height((num_rows * 8 * 3 + 4) as f32),

@@ -10,8 +10,8 @@ pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
-
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
+pub type Tile = [[ColorIdx; 8]; 8];
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Palette {
@@ -19,7 +19,7 @@ pub struct Palette {
     pub modified: bool,
     pub name: String,
     pub colors: [ColorRGB; 16],
-    pub tiles: Vec<[[ColorIdx; 8]; 8]>,
+    pub tiles: Vec<Tile>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -72,6 +72,7 @@ pub struct EditorState {
 
     // Tile editing state:
     pub tile_idx: Option<TileIdx>,
+    pub selected_tile: Tile,
 
     // Graphics editing state:
     pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
@@ -98,6 +99,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         color_idx: None,
         selected_color: (0, 0, 0),
         tile_idx: None,
+        selected_tile: [[0; 8]; 8],
         pixel_coords: None,
         dialogue: None,
     };

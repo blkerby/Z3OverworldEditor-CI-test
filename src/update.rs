@@ -318,8 +318,14 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             state.palettes[state.palette_idx].modified = true;
         }
         Message::ClickTile(idx) => {
-            state.tile_idx = Some(idx);
-            state.pixel_coords = None;
+            if state.brush_mode {
+                state.palettes[state.palette_idx].tiles[idx as usize] = state.selected_tile;
+                state.palettes[state.palette_idx].modified = true;
+            } else {
+                state.tile_idx = Some(idx);
+                state.selected_tile = state.palettes[state.palette_idx].tiles[idx as usize];
+                state.pixel_coords = None
+            }
         }
         Message::ClickPixel(x, y) => {
             state.pixel_coords = Some((x, y));
