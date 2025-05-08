@@ -1,6 +1,7 @@
 mod palette;
 mod tiles;
 mod graphics;
+mod screen;
 
 use std::path::PathBuf;
 
@@ -14,6 +15,7 @@ use iced::{
 };
 use iced_aw::quad;
 use palette::{add_palette_view, delete_palette_view, palette_view, rename_palette_view};
+use screen::screen_view;
 use tiles::tile_view;
 
 use crate::{
@@ -82,10 +84,6 @@ fn vertical_separator() -> quad::Quad {
         width: Length::Fixed(1.0),
         ..Default::default()
     }
-}
-
-pub fn screen_view(_state: &EditorState) -> Element<Message> {
-    Space::with_width(Length::Fill).into()
 }
 
 pub fn view(state: &EditorState) -> Element<Message> {

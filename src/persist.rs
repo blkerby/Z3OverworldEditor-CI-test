@@ -9,7 +9,7 @@ use log::info;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Serializer;
 
-use crate::state::{EditorState, Palette};
+use crate::state::{EditorState, Palette, Subscreen};
 
 fn save_json<T: Serialize>(path: &Path, data: &T) -> Result<()> {
     info!("Saving {}", path.display());
@@ -74,12 +74,19 @@ fn load_palettes(state: &mut EditorState) -> Result<()> {
     state.palettes.clear();
     for entry in glob::glob(&pattern)? {
         let path = entry?;
-        let pal: Palette = load_json(&path)?;
+        let name = path
+            .file_stem()
+            .context(format!("bad file name: {}", path.display()))?
+            .to_str()
+            .context("bad file stem")?;
+        let mut pal: Palette = load_json(&path)?;
+        pal.name = name.to_owned();
         state.palettes.push(pal);
     }
     if state.palettes.len() == 0 {
         let mut pal = Palette::default();
         pal.name = "Default".to_string();
+        pal.tiles = vec![[[0; 8]; 8]; 16];
         state.palettes.push(pal);
     }
     state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
@@ -94,10 +101,55 @@ pub fn delete_palette(state: &mut EditorState, name: &str) -> Result<()> {
     Ok(())
 }
 
-fn load_tiles(state: &mut EditorState) -> Result<()> {
-    let tiles = &mut state.palettes[state.palette_idx].tiles;
-    if tiles.len() == 0 {
-        tiles.extend(vec![[[0; 8]; 8]; 16]);
+fn get_screen_dir(state: &EditorState) -> Result<PathBuf> {
+    Ok(get_project_dir(state)?.join("Screens"))
+}
+
+fn load_screen_list(state: &mut EditorState) -> Result<()> {
+    let screen_dir = get_screen_dir(state)?;
+
+    let pattern = format!("{}/*/*.json", screen_dir.display());
+    state.theme_names.clear();
+    state.screen_names.clear();
+    for entry in glob::glob(&pattern)? {
+        let path = entry?;
+        let theme_name = path.file_stem().unwrap().to_str().unwrap();
+        let parent_path = path.parent().unwrap();
+        let screen_name = parent_path.file_name().unwrap().to_owned();
+        state.theme_names.push(theme_name.to_string());
+        state.screen_names.push(screen_name.into_string().unwrap());
+    }
+    if state.theme_names.len() == 0 {
+        state.theme_names.push("Default theme".to_string());
+    }
+    if state.screen_names.len() == 0 {
+        state.screen_names.push("Example screen".to_string());
+        state.screen.name = "Example screen".to_string();
+        state.screen.theme = "Default theme".to_string();
+        state.screen.palettes = vec![state.palettes[0].name.clone()];
+        for y in 0..2 {
+            for x in 0..2 {
+                state.screen.subscreens.push(Subscreen {
+                    position: (x, y),
+                    palettes: [[0; 32]; 32],
+                    tiles: [[0; 32]; 32],
+                });
+            }
+        }
+        state.screen.modified = true;
+    }
+    state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
+
+    Ok(())
+}
+
+pub fn save_screen(state: &mut EditorState) -> Result<()> {
+    let screen_dir = get_screen_dir(state)?;
+    if state.screen.modified {
+        let screen_filename = format!("{}.json", state.screen.theme);
+        let screen_path = screen_dir.join(&state.screen.name).join(screen_filename);
+        save_json(&screen_path, &state.screen)?;
+        state.screen.modified = false;
     }
     Ok(())
 }
@@ -112,6 +164,6 @@ pub fn save_project(state: &mut EditorState) -> Result<()> {
 
 pub fn load_project(state: &mut EditorState) -> Result<()> {
     load_palettes(state)?;
-    load_tiles(state)?;
+    load_screen_list(state)?;
     Ok(())
 }

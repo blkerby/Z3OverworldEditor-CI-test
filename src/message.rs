@@ -26,4 +26,7 @@ pub enum Message {
     DeleteTileRow,
     ClickTile(TileIdx),
     ClickPixel(PixelCoord, PixelCoord),
+    SelectScreen(String),
+    AddScreenDialogue,
+    RenameScreenDialogue,
 }

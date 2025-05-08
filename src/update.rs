@@ -342,6 +342,15 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                     state.selected_color = pal.colors[color_idx as usize];
                 }
             }
+        },
+        Message::SelectScreen(name) => {
+
+        }
+        Message::AddScreenDialogue => {
+
+        }
+        Message::RenameScreenDialogue => {
+            
         }
     }
     Task::none()

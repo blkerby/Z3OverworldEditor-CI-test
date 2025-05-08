@@ -8,6 +8,7 @@ use crate::persist;
 
 pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
+pub type PaletteIdx = u8; // Index into the screen's palette list
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
@@ -17,6 +18,7 @@ pub type Tile = [[ColorIdx; 8]; 8];
 pub struct Palette {
     #[serde(skip_serializing, skip_deserializing)]
     pub modified: bool,
+    #[serde(skip_serializing, skip_deserializing)]
     pub name: String,
     pub colors: [ColorRGB; 16],
     pub tiles: Vec<Tile>,
@@ -29,24 +31,27 @@ pub struct GlobalConfig {
     pub project_dir: Option<PathBuf>,
 }
 
-// struct Screen {
-//     theme: String,
-//     world: String,
-//     name: String,
-//     position_x: Option<u8>,
-//     position_y: Option<u8>,
-//     size_x: u8,
-//     size_y: u8,
-//     palettes: Vec<String>,  // palette names used in this screen
-//     tiles: Vec<TileIdx>,
-// }
+#[derive(Serialize, Deserialize, Default)]
+pub struct Subscreen {
+    pub position: (u8, u8), // X and Y position of the subscreen within the screen, in subscreen counts
+    pub palettes: [[PaletteIdx; 32]; 32],
+    pub tiles: [[TileIdx; 32]; 32],
+}
 
-// #[derive(Default)]
-// struct ScreenState {
-//     selected_theme_idx: usize,
-//     selected_world_idx: usize,
-//     selected_screen_idx: usize,
-// }
+#[derive(Serialize, Deserialize, Default)]
+pub struct Screen {
+    #[serde(skip_serializing, skip_deserializing)]
+    pub modified: bool,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub name: String,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub theme: String,
+    // Palette names used in this screen. Order matters: the TileIdx data indexes into this list.
+    pub palettes: Vec<String>,
+    // A 'subscreen' is a 32x32 block of 8x8 tiles, roughly the size that fits on camera at once.
+    // Splitting it up like this helps with formatting of the JSON, e.g. for viewing git diffs.
+    pub subscreens: Vec<Subscreen>,
+}
 
 pub enum Dialogue {
     AddPalette { name: String },
@@ -60,7 +65,9 @@ pub struct EditorState {
 
     // Project data:
     pub palettes: Vec<Palette>,
-    // screens: Vec<Screen>,
+    pub screen: Screen,
+    pub screen_names: Vec<String>,
+    pub theme_names: Vec<String>,
 
     // General editing state:
     pub brush_mode: bool,
@@ -94,6 +101,9 @@ pub fn get_initial_state() -> Result<EditorState> {
         global_config_path: get_global_config_path()?,
         global_config: GlobalConfig::default(),
         palettes: vec![],
+        screen: Screen::default(),
+        screen_names: vec![],
+        theme_names: vec![],
         brush_mode: false,
         palette_idx: 0,
         color_idx: None,
