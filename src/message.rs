@@ -40,5 +40,11 @@ pub enum Message {
     DeleteScreen,
     SelectTheme(String),
     AddThemeDialogue,
+    SetAddThemeName(String),
+    AddTheme,
     RenameThemeDialogue,
+    SetRenameThemeName(String),
+    RenameTheme,
+    DeleteThemeDialogue,
+    DeleteTheme,
 }

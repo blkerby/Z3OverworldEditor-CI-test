@@ -63,6 +63,9 @@ pub enum Dialogue {
     AddScreen { name: String, size: (u8, u8) },
     RenameScreen { name: String },
     DeleteScreen,
+    AddTheme { name: String },
+    RenameTheme { name: String },
+    DeleteTheme,
 }
 
 pub struct EditorState {

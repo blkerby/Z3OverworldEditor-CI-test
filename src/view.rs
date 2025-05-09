@@ -7,12 +7,15 @@ use std::path::PathBuf;
 
 use graphics::graphics_view;
 use iced::{
-    widget::{center, column, container, mouse_area, opaque, row, stack, Space},
+    widget::{center, column, container, mouse_area, opaque, row, stack},
     Element, Length, Theme,
 };
 use iced_aw::quad;
 use palette::{add_palette_view, delete_palette_view, palette_view, rename_palette_view};
-use screen::{add_screen_view, delete_screen_view, rename_screen_view, screen_view};
+use screen::{
+    add_screen_view, add_theme_view, delete_screen_view, delete_theme_view, rename_screen_view,
+    rename_theme_view, screen_view,
+};
 use tiles::tile_view;
 
 use crate::{
@@ -125,6 +128,19 @@ pub fn view(state: &EditorState) -> Element<Message> {
             }
             Dialogue::DeleteScreen => {
                 main_view = modal(main_view, delete_screen_view(state), Message::HideModal);
+            }
+            Dialogue::AddTheme { name } => {
+                main_view = modal(main_view, add_theme_view(name), Message::HideModal);
+            }
+            Dialogue::RenameTheme { name } => {
+                main_view = modal(
+                    main_view,
+                    rename_theme_view(state, name),
+                    Message::HideModal,
+                );
+            }
+            Dialogue::DeleteTheme => {
+                main_view = modal(main_view, delete_theme_view(state), Message::HideModal);
             }
         }
     }

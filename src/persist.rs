@@ -172,9 +172,45 @@ pub fn save_screen(state: &mut EditorState) -> Result<()> {
     Ok(())
 }
 
+pub fn copy_screen_theme(
+    state: &mut EditorState,
+    name: &str,
+    old_theme: &str,
+    new_theme: &str,
+) -> Result<()> {
+    let screen_dir = get_screen_dir(state)?.join(name);
+    let old_screen_path = screen_dir.join(format!("{}.json", old_theme));
+    let new_screen_path = screen_dir.join(format!("{}.json", new_theme));
+    info!(
+        "Copying {} to {}",
+        old_screen_path.display(),
+        new_screen_path.display()
+    );
+    std::fs::copy(old_screen_path, new_screen_path)?;
+    Ok(())
+}
+
 pub fn rename_screen(state: &mut EditorState, new_name: &str) -> Result<()> {
     let old_screen_path = get_screen_dir(state)?.join(&state.screen.name);
     let new_screen_path = get_screen_dir(state)?.join(new_name);
+    info!(
+        "Renaming {} to {} (directory)",
+        old_screen_path.display(),
+        new_screen_path.display()
+    );
+    std::fs::rename(old_screen_path, new_screen_path)?;
+    Ok(())
+}
+
+pub fn rename_screen_theme(
+    state: &EditorState,
+    screen_name: &str,
+    old_theme: &str,
+    new_theme: &str,
+) -> Result<()> {
+    let screen_dir = get_screen_dir(state)?.join(screen_name);
+    let old_screen_path = screen_dir.join(format!("{}.json", old_theme));
+    let new_screen_path = screen_dir.join(format!("{}.json", new_theme));
     info!(
         "Renaming {} to {}",
         old_screen_path.display(),
@@ -184,10 +220,16 @@ pub fn rename_screen(state: &mut EditorState, new_name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn delete_screen(state: &mut EditorState, name: &str, theme: &str) -> Result<()> {
-    let screen_dir = get_screen_dir(state)?;
-    let screen_filename = format!("{}.json", theme);
-    let screen_path = screen_dir.join(name).join(screen_filename);
+pub fn delete_screen(state: &mut EditorState, name: &str) -> Result<()> {
+    let screen_path = get_screen_dir(state)?.join(name);
+    info!("Deleting {}", screen_path.display());
+    std::fs::remove_dir_all(screen_path)?;
+    Ok(())
+}
+
+pub fn delete_screen_theme(state: &mut EditorState, screen_name: &str, theme: &str) -> Result<()> {
+    let screen_dir = get_screen_dir(state)?.join(screen_name);
+    let screen_path = screen_dir.join(format!("{}.json", theme));
     info!("Deleting {}", screen_path.display());
     std::fs::remove_file(screen_path)?;
     Ok(())

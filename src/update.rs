@@ -8,8 +8,8 @@ use log::{error, info, warn};
 use crate::{
     message::Message,
     persist::{
-        self, delete_palette, delete_screen, load_screen, load_screen_list, rename_screen,
-        save_screen,
+        self, copy_screen_theme, delete_palette, delete_screen, delete_screen_theme, load_screen,
+        load_screen_list, rename_screen, rename_screen_theme, save_screen,
     },
     state::{Dialogue, EditorState, Screen, Subscreen, TileIdx},
 };
@@ -394,6 +394,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                         return Task::none();
                     }
                     let name = name.clone();
+                    let size = size.clone();
                     for s in &state.screen_names {
                         if s == &name {
                             // Don't add a non-unique screen name.
@@ -401,23 +402,25 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                             return Task::none();
                         }
                     }
-                    state.screen = Screen {
-                        modified: true,
-                        name: name.clone(),
-                        theme: state.screen.theme.clone(),
-                        size: *size,
-                        palettes: state.screen.palettes.clone(),
-                        subscreens: (0..size.0)
-                            .cartesian_product(0..size.1)
-                            .map(|(x, y)| Subscreen {
-                                position: (x, y),
-                                palettes: [[0; 32]; 32],
-                                tiles: [[0; 32]; 32],
-                            })
-                            .collect(),
-                    };
-                    if let Err(e) = save_screen(state) {
-                        error!("Error saving new screen: {}\n{}", e, e.backtrace());
+                    for theme in state.theme_names.clone() {
+                        state.screen = Screen {
+                            modified: true,
+                            name: name.clone(),
+                            theme,
+                            size,
+                            palettes: state.screen.palettes.clone(),
+                            subscreens: (0..size.0)
+                                .cartesian_product(0..size.1)
+                                .map(|(x, y)| Subscreen {
+                                    position: (x, y),
+                                    palettes: [[0; 32]; 32],
+                                    tiles: [[0; 32]; 32],
+                                })
+                                .collect(),
+                        };
+                        if let Err(e) = save_screen(state) {
+                            error!("Error saving new screen: {}\n{}", e, e.backtrace());
+                        }
                     }
                     state.dialogue = None;
                     state.screen_names.push(name.clone());
@@ -475,11 +478,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 warn!("Not allowed to delete the last remaining screen.");
                 return Task::none();
             }
-            if let Err(e) = delete_screen(
-                state,
-                &state.screen.name.clone(),
-                &state.screen.theme.clone(),
-            ) {
+            if let Err(e) = delete_screen(state, &state.screen.name.clone()) {
                 error!("Error deleting screen: {}\n{}", e, e.backtrace());
                 return Task::none();
             }
@@ -508,8 +507,122 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 );
             }
         }
-        Message::AddThemeDialogue => {}
-        Message::RenameThemeDialogue => {}
+        Message::AddThemeDialogue => {
+            state.dialogue = Some(Dialogue::AddTheme {
+                name: "".to_string(),
+            });
+            return iced::widget::text_input::focus("AddTheme");
+        }
+        Message::SetAddThemeName(new_name) => match &mut state.dialogue {
+            Some(Dialogue::AddTheme { name }) => {
+                *name = new_name;
+            }
+            _ => {}
+        },
+        Message::AddTheme => {
+            match &state.dialogue {
+                Some(Dialogue::AddTheme { name: theme }) => {
+                    if theme.len() == 0 {
+                        warn!("Empty theme name is invalid.");
+                        return Task::none();
+                    }
+                    let theme = theme.to_string();
+                    for t in &state.theme_names {
+                        if t == &theme {
+                            // Don't add a non-unique theme name.
+                            warn!("Theme name {} already exists.", theme);
+                            return Task::none();
+                        }
+                    }
+                    let old_theme = state.screen.theme.clone();
+                    for screen_name in &state.screen_names.clone() {
+                        if let Err(e) = copy_screen_theme(state, screen_name, &old_theme, &theme) {
+                            error!("Error copying screen: {}\n{}", e, e.backtrace());
+                            return Task::none();
+                        }
+                    }
+                    state.screen.theme = theme.clone();
+                    state.theme_names.push(theme.clone());
+                    state.theme_names.sort();
+                    state.dialogue = None;
+                }
+                _ => {}
+            }
+        }
+        Message::RenameThemeDialogue => {
+            state.dialogue = Some(Dialogue::RenameTheme {
+                name: state.screen.theme.clone(),
+            });
+            return iced::widget::text_input::focus("RenameTheme");
+        }
+        Message::SetRenameThemeName(new_name) => match &mut state.dialogue {
+            Some(Dialogue::RenameTheme { name }) => {
+                *name = new_name;
+            }
+            _ => {}
+        },
+        Message::RenameTheme => {
+            match &state.dialogue {
+                Some(Dialogue::RenameTheme { name: theme }) => {
+                    if theme.len() == 0 {
+                        warn!("Empty theme name is invalid.");
+                        return Task::none();
+                    }
+                    let theme = theme.to_string();
+                    for t in &state.theme_names {
+                        if t == &theme {
+                            // Don't add a non-unique theme name.
+                            warn!("Theme name {} already exists.", theme);
+                            return Task::none();
+                        }
+                    }
+                    let old_theme = state.screen.theme.clone();
+                    for screen_name in &state.screen_names.clone() {
+                        if let Err(e) = rename_screen_theme(state, screen_name, &old_theme, &theme)
+                        {
+                            error!("Error renaming screen: {}\n{}", e, e.backtrace());
+                            return Task::none();
+                        }
+                    }
+                    if let Err(e) = load_screen_list(state) {
+                        error!("Error reloading screen listing: {}\n{}", e, e.backtrace());
+                        return Task::none();
+                    }
+                    state.screen.theme = theme;
+                    state.dialogue = None;
+                }
+                _ => {}
+            }
+        }
+        Message::DeleteThemeDialogue => {
+            state.dialogue = Some(Dialogue::DeleteTheme);
+        }
+        Message::DeleteTheme => {
+            if state.theme_names.len() == 1 {
+                warn!("Not allowed to delete the last remaining theme.");
+                return Task::none();
+            }
+            let theme = state.screen.theme.clone();
+            for screen_name in &state.screen_names.clone() {
+                if let Err(e) = delete_screen_theme(state, screen_name, &theme) {
+                    error!("Error deleting screen: {}\n{}", e, e.backtrace());
+                    return Task::none();
+                }
+            }
+            if let Err(e) = load_screen_list(state) {
+                error!("Error reloading screen listing: {}\n{}", e, e.backtrace());
+                return Task::none();
+            }
+            if let Err(e) = load_screen(
+                state,
+                &state.screen.name.clone(),
+                &state.theme_names[0].clone(),
+            ) {
+                error!("Error loading screen: {}\n{}", e, e.backtrace());
+                return Task::none();
+            }
+            state.dialogue = None;
+        }
     }
     Task::none()
 }

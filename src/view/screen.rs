@@ -4,13 +4,12 @@ use iced::{
     mouse,
     widget::{
         button, canvas, column, container, pick_list, row,
-        scrollable::{self, Direction, Scrollbar},
+        scrollable::{Direction, Scrollbar},
         text, text_input, Scrollable, Space,
     },
     Element, Length, Padding, Point, Rectangle, Size,
 };
 use iced_aw::number_input;
-use log::info;
 
 use crate::{
     message::Message,
@@ -408,6 +407,79 @@ pub fn delete_screen_view(state: &EditorState) -> Element<Message> {
             button(text("Delete screen"))
                 .style(button::danger)
                 .on_press(Message::DeleteScreen),
+        ]
+        .spacing(10),
+    )
+    .width(350)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
+}
+
+pub fn add_theme_view(name: &String) -> Element<Message> {
+    container(
+        column![
+            text("Add a new theme."),
+            row![
+                text("Name: ").width(70),
+                text_input("", name)
+                    .id("AddTheme")
+                    .on_input(Message::SetAddThemeName)
+                    .on_submit(Message::AddTheme)
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
+            button(text("Add theme"))
+                .style(button::success)
+                .on_press(Message::AddTheme),
+        ]
+        .spacing(10),
+    )
+    .width(350)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
+}
+
+pub fn rename_theme_view(state: &EditorState, name: &String) -> Element<'static, Message> {
+    let old_name = state.screen.theme.clone();
+    container(
+        column![
+            text(format!("Rename theme \"{}\"", old_name)),
+            row![
+                text("Name: ").width(70),
+                text_input("", name)
+                    .id("RenameTheme")
+                    .on_input(Message::SetRenameThemeName)
+                    .on_submit(Message::RenameTheme)
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
+            row![
+                button(text("Rename theme")).on_press(Message::RenameTheme),
+                Space::with_width(Length::Fill),
+                button(text("Delete theme"))
+                    .style(button::danger)
+                    .on_press(Message::DeleteThemeDialogue),
+            ],
+        ]
+        .spacing(10),
+    )
+    .width(350)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
+}
+
+pub fn delete_theme_view(state: &EditorState) -> Element<Message> {
+    let theme = state.screen.theme.clone();
+    container(
+        column![
+            text(format!("Delete theme \"{}\"?", theme)),
+            text("This will delete the theme across all screens."),
+            button(text("Delete theme"))
+                .style(button::danger)
+                .on_press(Message::DeleteTheme),
         ]
         .spacing(10),
     )
