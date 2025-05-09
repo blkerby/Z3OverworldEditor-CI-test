@@ -1,3 +1,4 @@
+// Module for managing the set of 8x8 tiles belonging to a palette.
 use iced::{
     mouse,
     widget::{

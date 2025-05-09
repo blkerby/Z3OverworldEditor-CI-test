@@ -1,3 +1,4 @@
+// Module for displaying/editing a screen
 use hashbrown::HashMap;
 use iced::{
     alignment::Vertical,
@@ -13,7 +14,7 @@ use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{scale_color, EditorState, Palette, Screen},
+    state::{scale_color, EditorState, Palette, PaletteId, Screen},
 };
 
 use super::modal_background_style;
@@ -25,7 +26,7 @@ use super::modal_background_style;
 struct ScreenGrid<'a> {
     screen: &'a Screen,
     palettes: &'a [Palette],
-    palettes_name_idx_map: &'a HashMap<String, usize>,
+    palettes_id_idx_map: &'a HashMap<PaletteId, usize>,
     pixel_size: f32,
     // thickness: f32,
     // brush_mode: bool,
@@ -98,25 +99,15 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let mut palette_idxs: Vec<Option<usize>> = vec![];
-        let mut color_bytes: Vec<Option<Vec<[u8; 4]>>> = vec![];
+        let mut color_bytes: Vec<Vec<[u8; 4]>> = vec![];
 
-        for i in 0..self.screen.palettes.len() {
-            let idx = self
-                .palettes_name_idx_map
-                .get(&self.screen.palettes[i])
-                .map(|x| *x);
-            palette_idxs.push(idx);
-            if let Some(j) = idx {
-                let cb = self.palettes[j]
-                    .colors
-                    .iter()
-                    .map(|&(r, g, b)| [scale_color(r), scale_color(g), scale_color(b), 255])
-                    .collect();
-                color_bytes.push(Some(cb));
-            } else {
-                color_bytes.push(None);
-            }
+        for i in 0..self.palettes.len() {
+            let cb = self.palettes[i]
+                .colors
+                .iter()
+                .map(|&(r, g, b)| [scale_color(r), scale_color(g), scale_color(b), 255])
+                .collect();
+            color_bytes.push(cb);
         }
 
         let num_cols = self.screen.size.1 as usize * 256;
@@ -130,12 +121,11 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                 let subscreen_addr = sy * 256 * row_stride + sx * 256 * 4;
                 for ty in 0..32 {
                     for tx in 0..32 {
-                        let palette_i = subscreen.palettes[ty][tx];
-                        let tile_idx = subscreen.tiles[ty][tx];
-                        if let Some(idx) = palette_idxs[palette_i as usize] {
-                            // info!("{} {} {} {}",sx,sy,tx,ty);
-                            let tile = self.palettes[idx].tiles[tile_idx as usize];
-                            let cb = color_bytes[idx].as_ref().unwrap();
+                        let palette_id = subscreen.palettes[ty][tx];
+                        if let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) {
+                            let tile_idx = subscreen.tiles[ty][tx];                        
+                            let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
+                            let cb = &color_bytes[palette_idx];
                             let mut tile_addr =
                                 subscreen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
                             for py in 0..8 {
@@ -146,7 +136,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                                     addr += 4;
                                 }
                                 tile_addr += row_stride;
-                            }
+                            }                            
                         } else {
                             // TODO: draw some indicator of the broken tile (due to invalid palette reference)
                         }
@@ -264,7 +254,7 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
             canvas(ScreenGrid {
                 screen: &state.screen,
                 palettes: &state.palettes,
-                palettes_name_idx_map: &state.palettes_name_idx_map,
+                palettes_id_idx_map: &state.palettes_id_idx_map,
                 pixel_size,
                 // thickness: 1.0,
                 // brush_mode: state.brush_mode,

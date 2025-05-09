@@ -153,7 +153,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::SelectPalette(name) => {
             for i in 0..state.palettes.len() {
-                if name == state.palettes[i].name {
+                if name == format!("{}: {}", state.palettes[i].id, state.palettes[i].name) {
                     state.palette_idx = i;
                     state.color_idx = None;
                     break;
@@ -161,20 +161,28 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             }
         }
         Message::AddPaletteDialogue => {
+            let id = state.palettes.iter().map(|x| x.id).max().unwrap() + 1;
             state.dialogue = Some(Dialogue::AddPalette {
                 name: "".to_string(),
+                id,
             });
             return iced::widget::text_input::focus("AddPalette");
         }
         Message::SetAddPaletteName(new_name) => match &mut state.dialogue {
-            Some(Dialogue::AddPalette { name }) => {
+            Some(Dialogue::AddPalette { name, .. }) => {
                 *name = new_name;
+            }
+            _ => {}
+        },
+        Message::SetAddPaletteID(new_id) => match &mut state.dialogue {
+            Some(Dialogue::AddPalette { id, .. }) => {
+                *id = new_id;
             }
             _ => {}
         },
         Message::AddPalette => {
             match &state.dialogue {
-                Some(Dialogue::AddPalette { name }) => {
+                Some(Dialogue::AddPalette { name, id }) => {
                     if name.len() == 0 {
                         warn!("Empty palette name is invalid.");
                         return Task::none();
@@ -185,9 +193,15 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                             warn!("Palette name {} already exists.", name);
                             return Task::none();
                         }
+                        if p.id == *id {
+                            // Don't add non-unique palette ID.
+                            warn!("Palette ID {} already exists.", id);
+                            return Task::none();
+                        }
                     }
                     let mut pal = state.palettes[state.palette_idx].clone();
                     pal.name = name.clone();
+                    pal.id = *id;
                     pal.modified = true;
                     state.palettes.push(pal);
                     state.palette_idx = state.palettes.len() - 1;
@@ -408,7 +422,6 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                             name: name.clone(),
                             theme,
                             size,
-                            palettes: state.screen.palettes.clone(),
                             subscreens: (0..size.0)
                                 .cartesian_product(0..size.1)
                                 .map(|(x, y)| Subscreen {
@@ -628,14 +641,12 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
 }
 
 pub fn update_palette_order(state: &mut EditorState) {
-    let name = state.palettes[state.palette_idx].name.clone();
-    state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
-    state.palettes_name_idx_map.clear();
+    let id = state.palettes[state.palette_idx].id;
+    state.palettes.sort_by(|x, y| x.id.cmp(&y.id));
+    state.palettes_id_idx_map.clear();
     for i in 0..state.palettes.len() {
-        state
-            .palettes_name_idx_map
-            .insert(state.palettes[i].name.clone(), i);
-        if state.palettes[i].name == name {
+        state.palettes_id_idx_map.insert(state.palettes[i].id, i);
+        if state.palettes[i].id == id {
             state.palette_idx = i;
             break;
         }

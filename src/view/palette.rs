@@ -1,4 +1,6 @@
+// Module for displaying and editing the 16 colors of palettes
 use iced::{
+    alignment::Vertical,
     mouse,
     widget::{button, canvas, column, container, pick_list, row, text, text_input, Space},
     Element, Length, Size,
@@ -120,8 +122,13 @@ impl canvas::Program<Message> for ColorBox {
 }
 
 pub fn palette_view(state: &EditorState) -> Element<Message> {
-    let palette_names: Vec<String> = state.palettes.iter().map(|x| x.name.clone()).collect();
-    let selected_palette_name = state.palettes[state.palette_idx].name.clone();
+    let palette_names: Vec<String> = state
+        .palettes
+        .iter()
+        .map(|x| format!("{}: {}", x.id, x.name))
+        .collect();
+    let pal = &state.palettes[state.palette_idx];
+    let selected_palette_name = format!("{}: {}", pal.id, pal.name);
 
     let mut colors_row = iced::widget::Row::new();
     let pal = &state.palettes[state.palette_idx];
@@ -184,15 +191,27 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
     row![col].padding(10).into()
 }
 
-pub fn add_palette_view(name: &String) -> Element<Message> {
+pub fn add_palette_view(name: &String, id: u8) -> Element<Message> {
     container(
         column![
-            text("Select a name for the new palette"),
-            text_input("", name)
-                .id("AddPalette")
-                .on_input(Message::SetAddPaletteName)
-                .on_submit(Message::AddPalette)
-                .padding(5),
+            text("Select a name and ID for the new palette"),
+            row![
+                text("Name: ").width(70),
+                text_input("", name)
+                    .id("AddPalette")
+                    .on_input(Message::SetAddPaletteName)
+                    .on_submit(Message::AddPalette)
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
+            row![
+                text("ID: ").width(70),
+                number_input(&id, 0..=255, Message::SetAddPaletteID)
+                    .width(50)
+                    .on_submit(Message::AddPalette),
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
             button(text("Add palette"))
                 .style(button::success)
                 .on_press(Message::AddPalette),
@@ -210,7 +229,10 @@ pub fn rename_palette_view(state: &EditorState, name: &String) -> Element<'stati
     let old_name = &state.palettes[idx].name;
     container(
         column![
-            text(format!("Rename palette \"{}\"", old_name)),
+            text(format!(
+                "Rename palette {}: \"{}\"",
+                state.palettes[idx].id, old_name
+            )),
             text_input("", name)
                 .id("RenamePalette")
                 .on_input(Message::SetRenamePaletteName)
@@ -237,7 +259,10 @@ pub fn delete_palette_view(state: &EditorState) -> Element<Message> {
     let name = &state.palettes[idx].name;
     container(
         column![
-            text(format!("Delete palette \"{}\"?", name)),
+            text(format!(
+                "Delete palette {}: \"{}\"?",
+                state.palettes[idx].id, name
+            )),
             text("This will also delete all 8x8 tiles associated to this palette."),
             button(text("Delete palette"))
                 .style(button::danger)

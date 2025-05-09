@@ -103,8 +103,8 @@ pub fn view(state: &EditorState) -> Element<Message> {
 
     if let Some(dialogue) = &state.dialogue {
         match dialogue {
-            Dialogue::AddPalette { name } => {
-                main_view = modal(main_view, add_palette_view(name), Message::HideModal);
+            Dialogue::AddPalette { name, id } => {
+                main_view = modal(main_view, add_palette_view(name, *id), Message::HideModal);
             }
             Dialogue::DeletePalette => {
                 main_view = modal(main_view, delete_palette_view(state), Message::HideModal);

@@ -12,6 +12,7 @@ pub enum Message {
     SelectPalette(String),
     AddPaletteDialogue,
     SetAddPaletteName(String),
+    SetAddPaletteID(u8),
     AddPalette,
     DeletePaletteDialogue,
     DeletePalette,

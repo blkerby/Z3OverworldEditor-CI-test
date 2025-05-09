@@ -131,7 +131,6 @@ pub fn load_screen_list(state: &mut EditorState) -> Result<()> {
         state.screen.name = "Example".to_string();
         state.screen.theme = "Base".to_string();
         state.screen.size = (2, 2);
-        state.screen.palettes = vec![state.palettes[0].name.clone()];
         for y in 0..2 {
             for x in 0..2 {
                 state.screen.subscreens.push(Subscreen {

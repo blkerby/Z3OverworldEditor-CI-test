@@ -1,3 +1,4 @@
+// Module for displaying and editing 8x8 graphics pixel-by-pixel
 use iced::{
     mouse,
     widget::{canvas, Column},

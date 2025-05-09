@@ -9,7 +9,7 @@ use crate::persist;
 
 pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
-pub type PaletteIdx = u8; // Index into the screen's palette list
+pub type PaletteId = u8; // ID of the palette
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
@@ -21,6 +21,7 @@ pub struct Palette {
     pub modified: bool,
     #[serde(skip_serializing, skip_deserializing)]
     pub name: String,
+    pub id: PaletteId,
     pub colors: [ColorRGB; 16],
     pub tiles: Vec<Tile>,
 }
@@ -34,8 +35,11 @@ pub struct GlobalConfig {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Subscreen {
-    pub position: (u8, u8), // X and Y position of the subscreen within the screen, in subscreen counts
-    pub palettes: [[PaletteIdx; 32]; 32],
+    // X and Y position of the subscreen within the screen, in subscreen counts
+    // The subscreens are always listed in row-major order, so `position` is
+    // redundant; its onlu purpose is to improve readability of the JSON.
+    pub position: (u8, u8),
+    pub palettes: [[PaletteId; 32]; 32],
     pub tiles: [[TileIdx; 32]; 32],
 }
 
@@ -49,15 +53,13 @@ pub struct Screen {
     pub theme: String,
     // X and Y dimensions, measured in number of subscreens:
     pub size: (u8, u8),
-    // Palette names used in this screen. Order matters: the TileIdx data indexes into this list.
-    pub palettes: Vec<String>,
     // A 'subscreen' is a 256x256 pixel section, roughly the size that fits on camera at once.
     // Splitting it up like this helps with formatting of the JSON, e.g. for viewing git diffs.
     pub subscreens: Vec<Subscreen>,
 }
 
 pub enum Dialogue {
-    AddPalette { name: String },
+    AddPalette { name: String, id: u8 },
     RenamePalette { name: String },
     DeletePalette,
     AddScreen { name: String, size: (u8, u8) },
@@ -67,6 +69,12 @@ pub enum Dialogue {
     RenameTheme { name: String },
     DeleteTheme,
 }
+
+// pub struct TileSelection {
+//     pub size: (usize, usize),
+//     pub palettes: Vec<Vec<PaletteId>>,
+//     pub tiles: Vec<Vec<TileIdx>>,
+// }
 
 pub struct EditorState {
     pub global_config_path: PathBuf,
@@ -97,7 +105,7 @@ pub struct EditorState {
     pub dialogue: Option<Dialogue>,
 
     // Cached data:
-    pub palettes_name_idx_map: HashMap<String, usize>,
+    pub palettes_id_idx_map: HashMap<u8, usize>,
 }
 
 fn get_global_config_path() -> Result<PathBuf> {
@@ -124,7 +132,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         selected_tile: [[0; 8]; 8],
         pixel_coords: None,
         dialogue: None,
-        palettes_name_idx_map: HashMap::new(),
+        palettes_id_idx_map: HashMap::new(),
     };
     match persist::load_global_config(&mut editor_state) {
         Ok(_) => {
