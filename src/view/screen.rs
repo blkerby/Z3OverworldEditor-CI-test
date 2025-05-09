@@ -6,7 +6,7 @@ use iced::{
     widget::{
         button, canvas, column, container, pick_list, row,
         scrollable::{Direction, Scrollbar},
-        text, text_input, Scrollable, Space,
+        stack, text, text_input, Scrollable, Space,
     },
     Element, Length, Padding, Point, Rectangle, Size,
 };
@@ -32,7 +32,7 @@ struct ScreenGrid<'a> {
     brush_mode: bool,
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 enum InternalState {
     #[default]
     None,
@@ -40,14 +40,13 @@ enum InternalState {
     Brushing,
 }
 
-fn clamped_position_in(
-    p: Point,
-    bounds: iced::Rectangle,
-    pixel_size: f32,
-) -> Point<TileCoord> {
+fn clamped_position_in(p: Point, bounds: iced::Rectangle, pixel_size: f32) -> Point<TileCoord> {
     let x = f32::min(f32::max(p.x - bounds.x, 0.0), bounds.width - 1.0) / (8.0 * pixel_size);
     let y = f32::min(f32::max(p.y - bounds.y, 0.0), bounds.height - 1.0) / (8.0 * pixel_size);
-    Point { x: x as TileCoord, y: y as TileCoord }
+    Point {
+        x: x as TileCoord,
+        y: y as TileCoord,
+    }
 }
 
 impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
@@ -68,13 +67,21 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                             *state = InternalState::Brushing;
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::ScreenBrush(clamped_position_in(p, bounds, self.pixel_size)))
+                                Some(Message::ScreenBrush(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.pixel_size,
+                                ))),
                             );
                         } else {
                             *state = InternalState::Selecting;
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::StartScreenSelection(clamped_position_in(p, bounds, self.pixel_size))),
+                                Some(Message::StartScreenSelection(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.pixel_size,
+                                ))),
                             );
                         }
                     };
@@ -86,7 +93,11 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::EndScreenSelection(clamped_position_in(p, bounds, self.pixel_size))),
+                                Some(Message::EndScreenSelection(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.pixel_size,
+                                ))),
                             );
                         }
                     }
@@ -96,19 +107,26 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::ProgressScreenSelection(clamped_position_in(p, bounds, self.pixel_size))),
+                                Some(Message::ProgressScreenSelection(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.pixel_size,
+                                ))),
                             );
                         }
                     } else if self.brush_mode && *state == InternalState::Brushing {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::ScreenBrush(clamped_position_in(p, bounds, self.pixel_size))),
+                                Some(Message::ScreenBrush(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.pixel_size,
+                                ))),
                             );
                         }
-
                     }
-                },
+                }
                 // mouse::Event::CursorLeft => {}
                 _ => {}
             },
@@ -208,76 +226,95 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
     }
 }
 
-// struct TileSelect {
-//     tile_idx: Option<TileIdx>,
-//     pixel_size: f32,
-//     thickness: f32,
-// }
+struct ScreenSelect {
+    top: TileCoord,
+    bottom: TileCoord,
+    left: TileCoord,
+    right: TileCoord,
+    active: bool,
+    pixel_size: f32,
+    brush_mode: bool,
+}
 
-// impl canvas::Program<Message> for TileSelect {
-//     // No internal state
-//     type State = ();
+impl canvas::Program<Message> for ScreenSelect {
+    // No internal state
+    type State = ();
 
-//     fn draw(
-//         &self,
-//         _state: &(),
-//         renderer: &iced::Renderer,
-//         theme: &iced::Theme,
-//         bounds: iced::Rectangle,
-//         _cursor: mouse::Cursor,
-//     ) -> Vec<canvas::Geometry> {
-//         let mut frame = canvas::Frame::new(renderer, bounds.size());
-//         let pixel_size = self.pixel_size;
-//         let thickness = self.thickness;
-//         let num_cols = 16;
+    fn draw(
+        &self,
+        _state: &(),
+        renderer: &iced::Renderer,
+        theme: &iced::Theme,
+        bounds: iced::Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        if !self.active {
+            return vec![];
+        }
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
 
-//         if let Some(idx) = self.tile_idx {
-//             let y = (idx / num_cols) as f32 * pixel_size * 8.0 + thickness / 2.0;
-//             let x = (idx % num_cols) as f32 * pixel_size * 8.0 + thickness / 2.0;
-//             let border_color = if theme.extended_palette().is_dark {
-//                 iced::Color::WHITE
-//             } else {
-//                 iced::Color::BLACK
-//             };
-//             let size = Size {
-//                 width: 8.0 * pixel_size as f32 + thickness,
-//                 height: 8.0 * pixel_size as f32 + thickness,
-//             };
-//             frame.stroke_rectangle(
-//                 iced::Point { x, y },
-//                 size,
-//                 canvas::Stroke {
-//                     width: thickness,
-//                     style: border_color.into(),
-//                     ..Default::default()
-//                 },
-//             );
-//         }
-//         vec![frame.into_geometry()]
-//     }
+        let pixel_size = self.pixel_size;
 
-//     // fn mouse_interaction(
-//     //     &self,
-//     //     _interaction: &Self::State,
-//     //     bounds: iced::Rectangle,
-//     //     cursor: mouse::Cursor,
-//     // ) -> mouse::Interaction {
-//     //     // if self.brush_mode && cursor.is_over(bounds) && self.exists_selection {
-//     //     //     mouse::Interaction::Crosshair
-//     //     // } else {
-//     //     //     mouse::Interaction::default()
-//     //     // }
-//     // }
-// }
+        let x0 = self.left as f32 * pixel_size * 8.0 + 0.5;
+        let x1 = (self.right + 1) as f32 * pixel_size * 8.0 - 0.5;
+        let y0 = self.top as f32 * pixel_size * 8.0 + 0.5;
+        let y1 = (self.bottom + 1) as f32 * pixel_size * 8.0 - 1.0;
+        let border_color = if theme.extended_palette().is_dark {
+            iced::Color::WHITE
+        } else {
+            iced::Color::BLACK
+        };
+        frame.stroke_rectangle(
+            iced::Point { x: x0, y: y0 },
+            Size {
+                width: x1 - x0,
+                height: y1 - y0,
+            },
+            canvas::Stroke {
+                width: 1.0,
+                style: border_color.into(),
+                ..Default::default()
+            },
+        );
+        vec![frame.into_geometry()]
+    }
+
+    fn mouse_interaction(
+        &self,
+        _interaction: &Self::State,
+        bounds: iced::Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if self.brush_mode && cursor.is_over(bounds) {
+            mouse::Interaction::Crosshair
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+}
 
 pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
     let num_cols = state.screen.size.1 * 32;
     let num_rows = state.screen.size.0 * 32;
     let pixel_size = 3.0;
 
+    let mut left = 0;
+    let mut right = 0;
+    let mut top = 0;
+    let mut bottom = 0;
+
+    match (state.start_coords, state.end_coords) {
+        (Some(p0), Some(p1)) => {
+            left = p0.0.min(p1.0);
+            right = p0.0.max(p1.0);
+            top = p0.1.min(p1.1);
+            bottom = p0.1.max(p1.1);
+        }
+        _ => {}
+    }
+
     Scrollable::with_direction(
-        column![
-            // stack![
+        column![stack![
             canvas(ScreenGrid {
                 screen: &state.screen,
                 palettes: &state.palettes,
@@ -288,15 +325,18 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
             })
             .width(num_cols as f32 * 8.0 * pixel_size)
             .height(num_rows as f32 * 8.0 * pixel_size),
-            // canvas(TileSelect {
-            //     tile_idx: state.tile_idx,
-            //     pixel_size: 3.0,
-            //     thickness: 1.0,
-            // })
-            // .width(384 + 2)
-            // .height((num_rows * 8 * 3 + 4) as f32)
-            // ],
-        ]
+            canvas(ScreenSelect {
+                active: state.start_coords.is_some() && state.end_coords.is_some(),
+                left,
+                right,
+                top,
+                bottom,
+                pixel_size,
+                brush_mode: state.brush_mode,
+            })
+            .width(num_cols as f32 * 8.0 * pixel_size)
+            .height(num_rows as f32 * 8.0 * pixel_size),
+        ]]
         .padding(Padding::new(0.0).right(15.0).bottom(15.0)),
         Direction::Both {
             vertical: Scrollbar::default(),

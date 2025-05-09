@@ -79,12 +79,14 @@ impl Screen {
 
     pub fn set_tile(&mut self, x: TileCoord, y: TileCoord, tile_idx: TileIdx) {
         let subscreen_i = self.get_subscreen(x, y);
-        self.subscreens[subscreen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize] = tile_idx;
+        self.subscreens[subscreen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize] =
+            tile_idx;
     }
 
     pub fn set_palette(&mut self, x: TileCoord, y: TileCoord, palette_id: PaletteId) {
         let subscreen_i = self.get_subscreen(x, y);
-        self.subscreens[subscreen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize] = palette_id;
+        self.subscreens[subscreen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize] =
+            palette_id;
     }
 }
 
