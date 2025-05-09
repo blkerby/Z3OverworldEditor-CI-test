@@ -14,7 +14,7 @@ use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{scale_color, EditorState, Palette, PaletteId, Screen},
+    state::{scale_color, EditorState, Palette, PaletteId, Screen, TileCoord},
 };
 
 use super::modal_background_style;
@@ -29,66 +29,93 @@ struct ScreenGrid<'a> {
     palettes_id_idx_map: &'a HashMap<PaletteId, usize>,
     pixel_size: f32,
     // thickness: f32,
-    // brush_mode: bool,
+    brush_mode: bool,
 }
 
-#[derive(Default)]
-struct InternalState {
-    clicking: bool,
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum InternalState {
+    #[default]
+    None,
+    Selecting,
+    Brushing,
+}
+
+fn clamped_position_in(
+    p: Point,
+    bounds: iced::Rectangle,
+    pixel_size: f32,
+) -> Point<TileCoord> {
+    let x = f32::min(f32::max(p.x - bounds.x, 0.0), bounds.width - 1.0) / (8.0 * pixel_size);
+    let y = f32::min(f32::max(p.y - bounds.y, 0.0), bounds.height - 1.0) / (8.0 * pixel_size);
+    Point { x: x as TileCoord, y: y as TileCoord }
 }
 
 impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
-    // No internal state
     type State = InternalState;
 
-    // fn update(
-    //     &self,
-    //     state: &mut Self::State,
-    //     event: canvas::Event,
-    //     bounds: iced::Rectangle,
-    //     cursor: mouse::Cursor,
-    // ) -> (canvas::event::Status, Option<Message>) {
-    //     let Some(p) = cursor.position_in(bounds) else {
-    //         return (canvas::event::Status::Ignored, None);
-    //     };
+    fn update(
+        &self,
+        state: &mut Self::State,
+        event: canvas::Event,
+        bounds: iced::Rectangle,
+        cursor: mouse::Cursor,
+    ) -> (canvas::event::Status, Option<Message>) {
+        match event {
+            canvas::Event::Mouse(mouse_event) => match mouse_event {
+                mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                    if let Some(p) = cursor.position_over(bounds) {
+                        if self.brush_mode {
+                            *state = InternalState::Brushing;
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::ScreenBrush(clamped_position_in(p, bounds, self.pixel_size)))
+                            );
+                        } else {
+                            *state = InternalState::Selecting;
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::StartScreenSelection(clamped_position_in(p, bounds, self.pixel_size))),
+                            );
+                        }
+                    };
+                }
+                mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                    let state0 = *state;
+                    *state = InternalState::None;
+                    if !self.brush_mode && state0 == InternalState::Selecting {
+                        if let Some(p) = cursor.position() {
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::EndScreenSelection(clamped_position_in(p, bounds, self.pixel_size))),
+                            );
+                        }
+                    }
+                }
+                mouse::Event::CursorMoved { .. } => {
+                    if !self.brush_mode && *state == InternalState::Selecting {
+                        if let Some(p) = cursor.position() {
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::ProgressScreenSelection(clamped_position_in(p, bounds, self.pixel_size))),
+                            );
+                        }
+                    } else if self.brush_mode && *state == InternalState::Brushing {
+                        if let Some(p) = cursor.position() {
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::ScreenBrush(clamped_position_in(p, bounds, self.pixel_size))),
+                            );
+                        }
 
-    //     let mut click: bool = false;
-    //     match event {
-    //         canvas::Event::Mouse(mouse_event) => match mouse_event {
-    //             mouse::Event::ButtonPressed(mouse::Button::Left) => {
-    //                 state.clicking = true;
-    //                 click = true;
-    //             }
-    //             mouse::Event::ButtonReleased(mouse::Button::Left) => {
-    //                 state.clicking = false;
-    //             }
-    //             mouse::Event::CursorMoved { .. } => {
-    //                 if state.clicking {
-    //                     click = true;
-    //                 }
-    //             }
-    //             mouse::Event::CursorLeft => {
-    //                 state.clicking = false;
-    //             }
-    //             _ => {}
-    //         },
-    //         _ => {}
-    //     }
-
-    //     if click {
-    //         let y = ((p.y - 1.0) / (self.pixel_size * 8.0)) as i32;
-    //         let x = ((p.x - 1.0) / (self.pixel_size * 8.0)) as i32;
-    //         if x < 0 || x >= 16 {
-    //             return (canvas::event::Status::Ignored, None);
-    //         }
-    //         let i = y * 16 + x;
-    //         if i >= 0 && i < self.palette.tiles.len() as i32 {
-    //             let message = Some(Message::ClickTile(i as TileIdx));
-    //             return (canvas::event::Status::Captured, message);
-    //         }
-    //     }
-    //     (canvas::event::Status::Ignored, None)
-    // }
+                    }
+                },
+                // mouse::Event::CursorLeft => {}
+                _ => {}
+            },
+            _ => {}
+        }
+        (canvas::event::Status::Ignored, None)
+    }
 
     fn draw(
         &self,
@@ -123,7 +150,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                     for tx in 0..32 {
                         let palette_id = subscreen.palettes[ty][tx];
                         if let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) {
-                            let tile_idx = subscreen.tiles[ty][tx];                        
+                            let tile_idx = subscreen.tiles[ty][tx];
                             let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
                             let cb = &color_bytes[palette_idx];
                             let mut tile_addr =
@@ -136,7 +163,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                                     addr += 4;
                                 }
                                 tile_addr += row_stride;
-                            }                            
+                            }
                         } else {
                             // TODO: draw some indicator of the broken tile (due to invalid palette reference)
                         }
@@ -167,18 +194,18 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
         vec![frame.into_geometry()]
     }
 
-    // fn mouse_interaction(
-    //     &self,
-    //     _interaction: &Self::State,
-    //     bounds: iced::Rectangle,
-    //     cursor: mouse::Cursor,
-    // ) -> mouse::Interaction {
-    //     if self.brush_mode && cursor.is_over(bounds) {
-    //         mouse::Interaction::Crosshair
-    //     } else {
-    //         mouse::Interaction::default()
-    //     }
-    // }
+    fn mouse_interaction(
+        &self,
+        _interaction: &Self::State,
+        bounds: iced::Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if self.brush_mode && cursor.is_over(bounds) {
+            mouse::Interaction::Crosshair
+        } else {
+            mouse::Interaction::default()
+        }
+    }
 }
 
 // struct TileSelect {
@@ -257,7 +284,7 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
                 palettes_id_idx_map: &state.palettes_id_idx_map,
                 pixel_size,
                 // thickness: 1.0,
-                // brush_mode: state.brush_mode,
+                brush_mode: state.brush_mode,
             })
             .width(num_cols as f32 * 8.0 * pixel_size)
             .height(num_rows as f32 * 8.0 * pixel_size),

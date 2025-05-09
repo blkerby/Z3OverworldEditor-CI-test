@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use crate::state::{ColorIdx, ColorValue, PixelCoord, TileIdx};
+use iced::Point;
+
+use crate::state::{ColorIdx, ColorValue, PixelCoord, TileCoord, TileIdx};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -48,4 +50,8 @@ pub enum Message {
     RenameTheme,
     DeleteThemeDialogue,
     DeleteTheme,
+    StartScreenSelection(Point<TileCoord>),
+    ProgressScreenSelection(Point<TileCoord>),
+    EndScreenSelection(Point<TileCoord>),
+    ScreenBrush(Point<TileCoord>),
 }

@@ -12,6 +12,7 @@ pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
 pub type PaletteId = u8; // ID of the palette
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
+pub type TileCoord = u16; // Index into screen: number of 8x8 tiles from top-left corner
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
 pub type Tile = [[ColorIdx; 8]; 8];
 
@@ -58,6 +59,35 @@ pub struct Screen {
     pub subscreens: Vec<Subscreen>,
 }
 
+impl Screen {
+    pub fn get_subscreen(&self, x: TileCoord, y: TileCoord) -> usize {
+        let subscreen_x = (x / 32) as usize;
+        let subscreen_y = (y / 32) as usize;
+        let subscreen_i = subscreen_y * self.size.0 as usize + subscreen_x;
+        subscreen_i
+    }
+
+    pub fn get_tile(&self, x: TileCoord, y: TileCoord) -> TileIdx {
+        let subscreen_i = self.get_subscreen(x, y);
+        self.subscreens[subscreen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize]
+    }
+
+    pub fn get_palette(&self, x: TileCoord, y: TileCoord) -> PaletteId {
+        let subscreen_i = self.get_subscreen(x, y);
+        self.subscreens[subscreen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize]
+    }
+
+    pub fn set_tile(&mut self, x: TileCoord, y: TileCoord, tile_idx: TileIdx) {
+        let subscreen_i = self.get_subscreen(x, y);
+        self.subscreens[subscreen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize] = tile_idx;
+    }
+
+    pub fn set_palette(&mut self, x: TileCoord, y: TileCoord, palette_id: PaletteId) {
+        let subscreen_i = self.get_subscreen(x, y);
+        self.subscreens[subscreen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize] = palette_id;
+    }
+}
+
 pub enum Dialogue {
     AddPalette { name: String, id: u8 },
     RenamePalette { name: String },
@@ -70,11 +100,12 @@ pub enum Dialogue {
     DeleteTheme,
 }
 
-// pub struct TileSelection {
-//     pub size: (usize, usize),
-//     pub palettes: Vec<Vec<PaletteId>>,
-//     pub tiles: Vec<Vec<TileIdx>>,
-// }
+#[derive(Default, Debug)]
+pub struct TileBlock {
+    pub size: (TileCoord, TileCoord),
+    pub palettes: Vec<Vec<PaletteId>>,
+    pub tiles: Vec<Vec<TileIdx>>,
+}
 
 pub struct EditorState {
     pub global_config_path: PathBuf,
@@ -100,6 +131,11 @@ pub struct EditorState {
 
     // Graphics editing state:
     pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
+
+    // Screen editing state:
+    pub start_coords: Option<(TileCoord, TileCoord)>,
+    pub end_coords: Option<(TileCoord, TileCoord)>,
+    pub selected_tile_block: TileBlock,
 
     // Other editor state:
     pub dialogue: Option<Dialogue>,
@@ -130,6 +166,9 @@ pub fn get_initial_state() -> Result<EditorState> {
         selected_color: (0, 0, 0),
         tile_idx: None,
         selected_tile: [[0; 8]; 8],
+        start_coords: None,
+        end_coords: None,
+        selected_tile_block: TileBlock::default(),
         pixel_coords: None,
         dialogue: None,
         palettes_id_idx_map: HashMap::new(),

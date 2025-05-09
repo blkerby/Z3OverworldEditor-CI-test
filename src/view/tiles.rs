@@ -31,7 +31,6 @@ struct InternalState {
 }
 
 impl<'a> canvas::Program<Message> for TileGrid<'a> {
-    // No internal state
     type State = InternalState;
 
     fn update(

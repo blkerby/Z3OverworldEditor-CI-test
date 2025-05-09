@@ -11,7 +11,7 @@ use crate::{
         self, copy_screen_theme, delete_palette, delete_screen, delete_screen_theme, load_screen,
         load_screen_list, rename_screen, rename_screen_theme, save_screen,
     },
-    state::{Dialogue, EditorState, Screen, Subscreen, TileIdx},
+    state::{Dialogue, EditorState, PaletteId, Screen, Subscreen, TileBlock, TileCoord, TileIdx},
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
@@ -635,6 +635,49 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 return Task::none();
             }
             state.dialogue = None;
+        },
+        Message::StartScreenSelection(p) => {
+            state.start_coords = Some((p.x, p.y));
+            state.end_coords = Some((p.x, p.y));
+        }
+        Message::ProgressScreenSelection(p) => {
+            state.end_coords = Some((p.x, p.y));
+        }
+        Message::EndScreenSelection(p1) => {
+            let p1 = (p1.x, p1.y);
+            let Some(p0) = state.start_coords else {
+                return Task::none();
+            };
+            let left = p0.0.min(p1.0);
+            let right = p0.0.max(p1.0).min(state.screen.size.0 as TileCoord * 32 - 1);
+            let top = p0.1.min(p1.1);
+            let bottom = p0.1.max(p1.1).min(state.screen.size.1 as TileCoord * 32 - 1);
+            let mut palettes: Vec<Vec<PaletteId>> = vec![];
+            let mut tiles: Vec<Vec<TileIdx>> = vec![];
+            for y in top..=bottom {
+                let mut pal_row: Vec<PaletteId> = vec![];
+                let mut tile_row: Vec<TileIdx> = vec![];
+                for x in left..=right {
+                    pal_row.push(state.screen.get_palette(x, y));
+                    tile_row.push(state.screen.get_tile(x, y));
+                }
+                palettes.push(pal_row);
+                tiles.push(tile_row);
+            }
+            state.selected_tile_block = TileBlock {
+                size: (right - left + 1, bottom - top + 1),
+                palettes,
+                tiles
+            };
+        }
+        Message::ScreenBrush(p) => {
+            let s = &state.selected_tile_block;
+            for y in 0..s.size.1 {
+                for x in 0..s.size.0 {
+                    state.screen.set_palette(p.x + x, p.y + y, s.palettes[y as usize][x as usize]);
+                    state.screen.set_tile(p.x + x, p.y + y, s.tiles[y as usize][x as usize]);
+                }
+            }
         }
     }
     Task::none()
