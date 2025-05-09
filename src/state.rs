@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
+use hashbrown::HashMap;
 use log::info;
-use std::path::PathBuf;
+use std::{hash::Hash, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -46,9 +47,11 @@ pub struct Screen {
     pub name: String,
     #[serde(skip_serializing, skip_deserializing)]
     pub theme: String,
+    // X and Y dimensions, measured in number of subscreens:
+    pub size: (u8, u8),  
     // Palette names used in this screen. Order matters: the TileIdx data indexes into this list.
     pub palettes: Vec<String>,
-    // A 'subscreen' is a 32x32 block of 8x8 tiles, roughly the size that fits on camera at once.
+    // A 'subscreen' is a 256x256 pixel section, roughly the size that fits on camera at once.
     // Splitting it up like this helps with formatting of the JSON, e.g. for viewing git diffs.
     pub subscreens: Vec<Subscreen>,
 }
@@ -86,6 +89,9 @@ pub struct EditorState {
 
     // Other editor state:
     pub dialogue: Option<Dialogue>,
+
+    // Cached data:
+    pub palettes_name_idx_map: HashMap<String, usize>,
 }
 
 fn get_global_config_path() -> Result<PathBuf> {
@@ -112,6 +118,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         selected_tile: [[0; 8]; 8],
         pixel_coords: None,
         dialogue: None,
+        palettes_name_idx_map: HashMap::new(),
     };
     match persist::load_global_config(&mut editor_state) {
         Ok(_) => {
@@ -122,4 +129,8 @@ pub fn get_initial_state() -> Result<EditorState> {
         }
     }
     Ok(editor_state)
+}
+
+pub fn scale_color(c: u8) -> u8 {
+    ((c as u16) * 255 / 31) as u8
 }

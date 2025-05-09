@@ -6,6 +6,7 @@ use crate::state::{ColorIdx, ColorValue, PixelCoord, TileIdx};
 pub enum Message {
     Event(iced::Event),
     SaveProject,
+    WindowOpen(iced::window::Id),
     WindowClose(iced::window::Id),
     ProjectOpened(Option<PathBuf>),
     SelectPalette(String),
@@ -29,4 +30,7 @@ pub enum Message {
     SelectScreen(String),
     AddScreenDialogue,
     RenameScreenDialogue,
+    SelectTheme(String),
+    AddThemeDialogue,
+    RenameThemeDialogue,
 }

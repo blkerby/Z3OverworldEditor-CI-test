@@ -9,7 +9,7 @@ use log::info;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Serializer;
 
-use crate::state::{EditorState, Palette, Subscreen};
+use crate::{state::{EditorState, Palette, Subscreen}, update::update_palette_order};
 
 fn save_json<T: Serialize>(path: &Path, data: &T) -> Result<()> {
     info!("Saving {}", path.display());
@@ -89,7 +89,8 @@ fn load_palettes(state: &mut EditorState) -> Result<()> {
         pal.tiles = vec![[[0; 8]; 8]; 16];
         state.palettes.push(pal);
     }
-    state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
+    update_palette_order(state);
+    state.palette_idx = 0;
     Ok(())
 }
 
@@ -120,12 +121,13 @@ fn load_screen_list(state: &mut EditorState) -> Result<()> {
         state.screen_names.push(screen_name.into_string().unwrap());
     }
     if state.theme_names.len() == 0 {
-        state.theme_names.push("Default theme".to_string());
+        state.theme_names.push("Base".to_string());
     }
     if state.screen_names.len() == 0 {
-        state.screen_names.push("Example screen".to_string());
-        state.screen.name = "Example screen".to_string();
-        state.screen.theme = "Default theme".to_string();
+        state.screen_names.push("Example".to_string());
+        state.screen.name = "Example".to_string();
+        state.screen.theme = "Base".to_string();
+        state.screen.size = (2, 2);
         state.screen.palettes = vec![state.palettes[0].name.clone()];
         for y in 0..2 {
             for x in 0..2 {
@@ -140,6 +142,14 @@ fn load_screen_list(state: &mut EditorState) -> Result<()> {
     }
     state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
 
+    Ok(())
+}
+
+pub fn load_screen(state: &mut EditorState, name: &str, theme: &str) -> Result<()> {
+    let screen_path = get_screen_dir(state)?.join(name).join(format!("{}.json", theme));
+    state.screen = load_json(&screen_path)?;
+    state.screen.name = name.to_owned();
+    state.screen.theme = theme.to_owned();
     Ok(())
 }
 
@@ -159,11 +169,13 @@ pub fn save_project(state: &mut EditorState) -> Result<()> {
         return Ok(());
     }
     save_palettes(state)?;
+    save_screen(state)?;
     Ok(())
 }
 
 pub fn load_project(state: &mut EditorState) -> Result<()> {
     load_palettes(state)?;
     load_screen_list(state)?;
+    load_screen(state, &state.screen_names[0].clone(), &state.theme_names[0].clone())?;
     Ok(())
 }

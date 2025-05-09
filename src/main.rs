@@ -20,6 +20,7 @@ fn theme(_state: &EditorState) -> Theme {
 
 fn subscription(_state: &EditorState) -> Subscription<Message> {
     Subscription::batch(vec![
+        iced::window::open_events().map(Message::WindowOpen),
         iced::window::close_requests().map(Message::WindowClose),
         iced::time::every(Duration::from_secs(1)).map(|_| Message::SaveProject),
         iced::event::listen().map(Message::Event),

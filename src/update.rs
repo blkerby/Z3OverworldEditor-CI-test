@@ -105,6 +105,9 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 error!("Error saving project: {}\n{}", e, e.backtrace());
             }
         }
+        Message::WindowOpen(id) => {
+            return window::maximize(id, true);
+        }
         Message::WindowClose(id) => {
             if let Err(e) = persist::save_project(state) {
                 error!("Error saving project: {}\n{}", e, e.backtrace());
@@ -350,19 +353,31 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
 
         }
         Message::RenameScreenDialogue => {
+
+        }
+        Message::SelectTheme(name) => {
+
+        }
+        Message::AddThemeDialogue => {
+
+        }
+        Message::RenameThemeDialogue => {
             
         }
     }
     Task::none()
 }
 
-fn update_palette_order(state: &mut EditorState) {
+pub fn update_palette_order(state: &mut EditorState) {
     let name = state.palettes[state.palette_idx].name.clone();
     state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
+    state.palettes_name_idx_map.clear();
     for i in 0..state.palettes.len() {
+        state.palettes_name_idx_map.insert(state.palettes[i].name.clone(), i);
         if state.palettes[i].name == name {
             state.palette_idx = i;
             break;
         }
     }
+
 }

@@ -1,7 +1,12 @@
-use iced::{mouse, widget::{button, canvas, column, container, pick_list, row, text, text_input}, Element, Size};
+use iced::{
+    mouse, widget::{button, canvas, column, container, pick_list, row, text, text_input, Space}, Element, Length, Size
+};
 use iced_aw::number_input;
 
-use crate::{message::Message, state::{ColorIdx, EditorState}};
+use crate::{
+    message::Message,
+    state::{ColorIdx, EditorState},
+};
 
 use super::modal_background_style;
 
@@ -34,9 +39,7 @@ impl canvas::Program<Message> for ColorBox {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(button) => {
                     let message = match button {
-                        mouse::Button::Left => {
-                            Some(Message::ClickColor(self.color_idx))
-                        }
+                        mouse::Button::Left => Some(Message::ClickColor(self.color_idx)),
                         mouse::Button::Right => None,
                         _ => None,
                     };
@@ -84,13 +87,16 @@ impl canvas::Program<Message> for ColorBox {
                 height: frame.size().height - thickness - 1.0,
             };
             frame.stroke_rectangle(
-                iced::Point { x: thickness / 2.0, y: thickness / 2.0 },
+                iced::Point {
+                    x: thickness / 2.0,
+                    y: thickness / 2.0,
+                },
                 size,
                 canvas::Stroke {
                     width: thickness,
                     style: border_color.into(),
                     ..Default::default()
-                }
+                },
             );
         }
 
@@ -142,15 +148,12 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
                 Some(selected_palette_name),
                 Message::SelectPalette
             )
-            .width(200),
+            .width(Length::Fill),
             button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::success)
                 .on_press(Message::AddPaletteDialogue),
             button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
                 .on_press(Message::RenamePaletteDialogue),
-            button(text("\u{F5DE}").font(iced_fonts::BOOTSTRAP_FONT))
-                .style(button::danger)
-                .on_press(Message::DeletePaletteDialogue),
         ]
         .spacing(10)
         .align_y(iced::alignment::Vertical::Center),
@@ -162,28 +165,14 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
         col = col.push(
             row![
                 text("Red"),
-                number_input(
-                    &state.selected_color.0,
-                    0..=31,
-                    Message::ChangeRed
-                )
-                .width(rgb_width),
+                number_input(&state.selected_color.0, 0..=31, Message::ChangeRed).width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Green"),
-                number_input(
-                    &state.selected_color.1,
-                    0..=31,
-                    Message::ChangeGreen
-                )
-                .width(rgb_width),
+                number_input(&state.selected_color.1, 0..=31, Message::ChangeGreen)
+                    .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Blue"),
-                number_input(
-                    &state.selected_color.2,
-                    0..=31,
-                    Message::ChangeBlue
-                )
-                .width(rgb_width),
+                number_input(&state.selected_color.2, 0..=31, Message::ChangeBlue).width(rgb_width),
             ]
             .spacing(5)
             .align_y(iced::alignment::Vertical::Center),
@@ -208,8 +197,8 @@ pub fn add_palette_view(name: &String) -> Element<Message> {
         ]
         .spacing(10),
     )
-    .width(300)
-    .padding(20)
+    .width(350)
+    .padding(25)
     .style(modal_background_style)
     .into()
 }
@@ -225,12 +214,18 @@ pub fn rename_palette_view(state: &EditorState, name: &String) -> Element<'stati
                 .on_input(Message::SetRenamePaletteName)
                 .on_submit(Message::RenamePalette)
                 .padding(5),
-            button(text("Rename palette")).on_press(Message::RenamePalette),
+            row![
+                button(text("Rename palette")).on_press(Message::RenamePalette),
+                Space::with_width(Length::Fill),
+                button(text("Delete palette"))
+                    .style(button::danger)
+                    .on_press(Message::DeletePaletteDialogue),
+            ],
         ]
         .spacing(10),
     )
-    .width(300)
-    .padding(20)
+    .width(350)
+    .padding(25)
     .style(modal_background_style)
     .into()
 }
@@ -248,8 +243,8 @@ pub fn delete_palette_view(state: &EditorState) -> Element<Message> {
         ]
         .spacing(10),
     )
-    .width(300)
-    .padding(20)
+    .width(350)
+    .padding(25)
     .style(modal_background_style)
     .into()
 }
