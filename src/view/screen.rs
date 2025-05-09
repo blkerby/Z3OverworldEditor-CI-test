@@ -1,12 +1,15 @@
 use hashbrown::HashMap;
 use iced::{
-    mouse, widget::{
-        button, canvas, column, pick_list, row, scrollable::{self, Direction, Scrollbar}, text, Scrollable, Space
+    alignment::Vertical, mouse, widget::{
+        button, canvas, column, container, pick_list, row, scrollable::{self, Direction, Scrollbar}, text, text_input, Scrollable, Space
     }, Element, Length, Padding, Point, Rectangle, Size
 };
+use iced_aw::number_input;
 use log::info;
 
 use crate::{message::Message, state::{scale_color, EditorState, Palette, Screen}};
+
+use super::modal_background_style;
 
 
 
@@ -285,7 +288,7 @@ pub fn screen_view(state: &EditorState) -> Element<Message> {
                 Message::SelectScreen
             )
             .width(200),
-            button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
+            button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::success)
                 .on_press(Message::AddScreenDialogue),
             button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
@@ -297,7 +300,7 @@ pub fn screen_view(state: &EditorState) -> Element<Message> {
                 Message::SelectTheme
             )
             .width(200),
-            button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
+            button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::success)
                 .on_press(Message::AddThemeDialogue),
             button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
@@ -313,4 +316,83 @@ pub fn screen_view(state: &EditorState) -> Element<Message> {
     .width(Length::Fill);
 
     col.into()
+}
+
+pub fn add_screen_view(name: &String, size: (u8, u8)) -> Element<Message> {
+    container(
+        column![
+            text("Add a new screen."),
+            row![
+                text("Name: ").width(70),
+                text_input("", name)
+                .id("AddScreen")
+                .on_input(Message::SetAddScreenName)
+                .on_submit(Message::AddScreen)
+            ].spacing(10).align_y(Vertical::Center),
+            row![
+                text("Size: ").width(70),
+                number_input(&size.0, 1..=8, Message::SetAddScreenSizeX)
+                .width(50)
+                .on_submit(Message::AddScreen),
+                text(" by "),
+                number_input(&size.1, 1..=8, Message::SetAddScreenSizeY)
+                .width(50)
+                .on_submit(Message::AddScreen),
+            ].spacing(10).align_y(Vertical::Center),
+            button(text("Add screen"))
+                .style(button::success)
+                .on_press(Message::AddScreen),
+        ]
+        .spacing(10),
+    )
+    .width(350)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
+}
+
+pub fn rename_screen_view(state: &EditorState, name: &String) -> Element<'static, Message> {
+    let old_name = state.screen.name.clone();
+    container(
+        column![
+            text(format!("Rename screen \"{}\"", old_name)),
+            row![
+                text("Name: ").width(70),
+                text_input("", name)
+                .id("RenameScreen")
+                .on_input(Message::SetRenameScreenName)
+                .on_submit(Message::RenameScreen)
+            ].spacing(10).align_y(Vertical::Center),
+            row![
+                button(text("Rename screen")).on_press(Message::RenameScreen),
+                Space::with_width(Length::Fill),
+                button(text("Delete screen"))
+                    .style(button::danger)
+                    .on_press(Message::DeleteScreenDialogue),
+            ],
+        ]
+        .spacing(10),
+    )
+    .width(350)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
+}
+
+pub fn delete_screen_view(state: &EditorState) -> Element<Message> {
+    let name = state.screen.name.clone();
+    container(
+        column![
+            text(format!("Delete screen \"{}\"?", name)),
+            text("This will delete the screen across all themes."),
+            button(text("Delete screen"))
+                .style(button::danger)
+                .on_press(Message::DeleteScreen),
+        ]
+        .spacing(10),
+    )
+    .width(350)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
 }

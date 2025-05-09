@@ -229,10 +229,10 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
     let col = column![
         row![
             text("Tiles"),
-            button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
+            button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::success)
                 .on_press(Message::AddTileRow),
-            button(text("\u{F2E6}").font(iced_fonts::BOOTSTRAP_FONT))
+            button(text("\u{F63B}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::danger)
                 .on_press(Message::DeleteTileRow),
         ]

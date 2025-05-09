@@ -149,7 +149,7 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
                 Message::SelectPalette
             )
             .width(Length::Fill),
-            button(text("\u{F4FA}").font(iced_fonts::BOOTSTRAP_FONT))
+            button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::success)
                 .on_press(Message::AddPaletteDialogue),
             button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
 use log::info;
-use std::{hash::Hash, path::PathBuf};
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -60,6 +60,9 @@ pub enum Dialogue {
     AddPalette { name: String },
     RenamePalette { name: String },
     DeletePalette,
+    AddScreen { name: String, size: (u8, u8) },
+    RenameScreen { name: String },
+    DeleteScreen,
 }
 
 pub struct EditorState {

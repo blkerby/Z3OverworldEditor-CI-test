@@ -106,7 +106,7 @@ fn get_screen_dir(state: &EditorState) -> Result<PathBuf> {
     Ok(get_project_dir(state)?.join("Screens"))
 }
 
-fn load_screen_list(state: &mut EditorState) -> Result<()> {
+pub fn load_screen_list(state: &mut EditorState) -> Result<()> {
     let screen_dir = get_screen_dir(state)?;
 
     let pattern = format!("{}/*/*.json", screen_dir.display());
@@ -139,9 +139,12 @@ fn load_screen_list(state: &mut EditorState) -> Result<()> {
             }
         }
         state.screen.modified = true;
+        save_screen(state)?;
     }
-    state.palettes.sort_by(|x, y| x.name.cmp(&y.name));
-
+    state.screen_names.sort();
+    state.screen_names.dedup();
+    state.theme_names.sort();
+    state.theme_names.dedup();
     Ok(())
 }
 
@@ -161,6 +164,23 @@ pub fn save_screen(state: &mut EditorState) -> Result<()> {
         save_json(&screen_path, &state.screen)?;
         state.screen.modified = false;
     }
+    Ok(())
+}
+
+pub fn rename_screen(state: &mut EditorState, new_name: &str) -> Result<()> {
+    let old_screen_path = get_screen_dir(state)?.join(&state.screen.name);
+    let new_screen_path = get_screen_dir(state)?.join(new_name);
+    info!("Renaming {} to {}", old_screen_path.display(), new_screen_path.display());
+    std::fs::rename(old_screen_path, new_screen_path)?;
+    Ok(())
+}
+
+pub fn delete_screen(state: &mut EditorState, name: &str, theme: &str) -> Result<()> {
+    let screen_dir = get_screen_dir(state)?;
+    let screen_filename = format!("{}.json", theme);
+    let screen_path = screen_dir.join(name).join(screen_filename);
+    info!("Deleting {}", screen_path.display());
+    std::fs::remove_file(screen_path)?;
     Ok(())
 }
 

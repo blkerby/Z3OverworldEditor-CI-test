@@ -15,7 +15,7 @@ use iced::{
 };
 use iced_aw::quad;
 use palette::{add_palette_view, delete_palette_view, palette_view, rename_palette_view};
-use screen::screen_view;
+use screen::{add_screen_view, delete_screen_view, rename_screen_view, screen_view};
 use tiles::tile_view;
 
 use crate::{
@@ -107,7 +107,7 @@ pub fn view(state: &EditorState) -> Element<Message> {
                 main_view = modal(main_view, add_palette_view(name), Message::HideModal);
             }
             Dialogue::DeletePalette => {
-                main_view = modal(main_view, delete_palette_view(&state), Message::HideModal);
+                main_view = modal(main_view, delete_palette_view(state), Message::HideModal);
             }
             Dialogue::RenamePalette { name } => {
                 main_view = modal(
@@ -115,6 +115,15 @@ pub fn view(state: &EditorState) -> Element<Message> {
                     rename_palette_view(&state, name),
                     Message::HideModal,
                 );
+            }
+            Dialogue::AddScreen { name, size } => {
+                main_view = modal(main_view, add_screen_view(name, *size), Message::HideModal);
+            }
+            Dialogue::RenameScreen { name } => {
+                main_view = modal(main_view, rename_screen_view(state, name), Message::HideModal);
+            }
+            Dialogue::DeleteScreen => {
+                main_view = modal(main_view, delete_screen_view(state), Message::HideModal);
             }
         }
     }
