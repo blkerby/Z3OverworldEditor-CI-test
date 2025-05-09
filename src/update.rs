@@ -7,7 +7,10 @@ use log::{error, info, warn};
 
 use crate::{
     message::Message,
-    persist::{self, delete_palette, delete_screen, load_screen, load_screen_list, rename_screen, save_screen},
+    persist::{
+        self, delete_palette, delete_screen, load_screen, load_screen_list, rename_screen,
+        save_screen,
+    },
     state::{Dialogue, EditorState, Screen, Subscreen, TileIdx},
 };
 
@@ -404,11 +407,14 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                         theme: state.screen.theme.clone(),
                         size: *size,
                         palettes: state.screen.palettes.clone(),
-                        subscreens: (0..size.0).cartesian_product(0..size.1).map(|(x, y)| Subscreen {
-                            position: (x, y),
-                            palettes: [[0; 32]; 32],
-                            tiles: [[0; 32]; 32],
-                        }).collect()
+                        subscreens: (0..size.0)
+                            .cartesian_product(0..size.1)
+                            .map(|(x, y)| Subscreen {
+                                position: (x, y),
+                                palettes: [[0; 32]; 32],
+                                tiles: [[0; 32]; 32],
+                            })
+                            .collect(),
                     };
                     if let Err(e) = save_screen(state) {
                         error!("Error saving new screen: {}\n{}", e, e.backtrace());
@@ -469,7 +475,11 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 warn!("Not allowed to delete the last remaining screen.");
                 return Task::none();
             }
-            if let Err(e) = delete_screen(state, &state.screen.name.clone(), &state.screen.theme.clone()) {
+            if let Err(e) = delete_screen(
+                state,
+                &state.screen.name.clone(),
+                &state.screen.theme.clone(),
+            ) {
                 error!("Error deleting screen: {}\n{}", e, e.backtrace());
                 return Task::none();
             }
@@ -477,7 +487,11 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 error!("Error reloading screen listing: {}\n{}", e, e.backtrace());
                 return Task::none();
             }
-            if let Err(e) = load_screen(state, &state.screen_names[0].clone(), &state.screen.theme.clone()) {
+            if let Err(e) = load_screen(
+                state,
+                &state.screen_names[0].clone(),
+                &state.screen.theme.clone(),
+            ) {
                 error!("Error loading screen: {}\n{}", e, e.backtrace());
                 return Task::none();
             }

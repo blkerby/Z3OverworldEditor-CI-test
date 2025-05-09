@@ -9,7 +9,10 @@ use log::info;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Serializer;
 
-use crate::{state::{EditorState, Palette, Subscreen}, update::update_palette_order};
+use crate::{
+    state::{EditorState, Palette, Subscreen},
+    update::update_palette_order,
+};
 
 fn save_json<T: Serialize>(path: &Path, data: &T) -> Result<()> {
     info!("Saving {}", path.display());
@@ -149,7 +152,9 @@ pub fn load_screen_list(state: &mut EditorState) -> Result<()> {
 }
 
 pub fn load_screen(state: &mut EditorState, name: &str, theme: &str) -> Result<()> {
-    let screen_path = get_screen_dir(state)?.join(name).join(format!("{}.json", theme));
+    let screen_path = get_screen_dir(state)?
+        .join(name)
+        .join(format!("{}.json", theme));
     state.screen = load_json(&screen_path)?;
     state.screen.name = name.to_owned();
     state.screen.theme = theme.to_owned();
@@ -170,7 +175,11 @@ pub fn save_screen(state: &mut EditorState) -> Result<()> {
 pub fn rename_screen(state: &mut EditorState, new_name: &str) -> Result<()> {
     let old_screen_path = get_screen_dir(state)?.join(&state.screen.name);
     let new_screen_path = get_screen_dir(state)?.join(new_name);
-    info!("Renaming {} to {}", old_screen_path.display(), new_screen_path.display());
+    info!(
+        "Renaming {} to {}",
+        old_screen_path.display(),
+        new_screen_path.display()
+    );
     std::fs::rename(old_screen_path, new_screen_path)?;
     Ok(())
 }
@@ -196,6 +205,10 @@ pub fn save_project(state: &mut EditorState) -> Result<()> {
 pub fn load_project(state: &mut EditorState) -> Result<()> {
     load_palettes(state)?;
     load_screen_list(state)?;
-    load_screen(state, &state.screen_names[0].clone(), &state.theme_names[0].clone())?;
+    load_screen(
+        state,
+        &state.screen_names[0].clone(),
+        &state.theme_names[0].clone(),
+    )?;
     Ok(())
 }

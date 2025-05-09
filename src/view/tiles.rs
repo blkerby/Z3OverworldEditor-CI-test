@@ -1,9 +1,11 @@
 use iced::{
-    mouse, widget::{
+    mouse,
+    widget::{
         button, canvas, column, row,
         scrollable::{Direction, Scrollbar},
         stack, text, Scrollable,
-    }, Element, Length, Point, Rectangle, Size
+    },
+    Element, Length, Point, Rectangle, Size,
 };
 
 use crate::{
@@ -239,25 +241,23 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
         .spacing(10)
         .align_y(iced::alignment::Vertical::Center),
         Scrollable::with_direction(
-            column![
-                stack![
-                    canvas(TileGrid {
-                        palette: &state.palettes[state.palette_idx],
-                        pixel_size: 3.0,
-                        thickness: 1.0,
-                        brush_mode: state.brush_mode,
-                    })
-                    .width(384 + 2)
-                    .height((num_rows * 8 * 3 + 4) as f32),
-                    canvas(TileSelect {
-                        tile_idx: state.tile_idx,
-                        pixel_size: 3.0,
-                        thickness: 1.0,
-                    })
-                    .width(384 + 2)
-                    .height((num_rows * 8 * 3 + 4) as f32)
-                ],    
-            ],
+            column![stack![
+                canvas(TileGrid {
+                    palette: &state.palettes[state.palette_idx],
+                    pixel_size: 3.0,
+                    thickness: 1.0,
+                    brush_mode: state.brush_mode,
+                })
+                .width(384 + 2)
+                .height((num_rows * 8 * 3 + 4) as f32),
+                canvas(TileSelect {
+                    tile_idx: state.tile_idx,
+                    pixel_size: 3.0,
+                    thickness: 1.0,
+                })
+                .width(384 + 2)
+                .height((num_rows * 8 * 3 + 4) as f32)
+            ],],
             Direction::Vertical(Scrollbar::default())
         )
         .width(400)

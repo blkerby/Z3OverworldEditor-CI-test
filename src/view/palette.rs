@@ -1,5 +1,7 @@
 use iced::{
-    mouse, widget::{button, canvas, column, container, pick_list, row, text, text_input, Space}, Element, Length, Size
+    mouse,
+    widget::{button, canvas, column, container, pick_list, row, text, text_input, Space},
+    Element, Length, Size,
 };
 use iced_aw::number_input;
 

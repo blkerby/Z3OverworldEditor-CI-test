@@ -48,7 +48,7 @@ pub struct Screen {
     #[serde(skip_serializing, skip_deserializing)]
     pub theme: String,
     // X and Y dimensions, measured in number of subscreens:
-    pub size: (u8, u8),  
+    pub size: (u8, u8),
     // Palette names used in this screen. Order matters: the TileIdx data indexes into this list.
     pub palettes: Vec<String>,
     // A 'subscreen' is a 256x256 pixel section, roughly the size that fits on camera at once.
@@ -77,7 +77,7 @@ pub struct EditorState {
 
     // General editing state:
     pub brush_mode: bool,
-    
+
     // Palette editing state:
     pub palette_idx: usize,
     pub color_idx: Option<ColorIdx>,

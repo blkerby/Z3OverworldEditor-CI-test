@@ -68,8 +68,11 @@ impl canvas::Program<Message> for GraphicsBox {
             let x = (p.x / self.pixel_size) as i32;
             if x < 0 || x >= 8 || y < 0 || y >= 8 {
                 return (canvas::event::Status::Ignored, None);
-            }    
-            (canvas::event::Status::Captured, Some(Message::ClickPixel(x as PixelCoord, y as PixelCoord)))
+            }
+            (
+                canvas::event::Status::Captured,
+                Some(Message::ClickPixel(x as PixelCoord, y as PixelCoord)),
+            )
         } else {
             (canvas::event::Status::Ignored, None)
         }
@@ -113,9 +116,9 @@ impl canvas::Program<Message> for GraphicsBox {
                 iced::Color::BLACK
             };
             frame.stroke_rectangle(
-                iced::Point { 
-                    x: x as f32 * self.pixel_size + self.thickness / 2.0, 
-                    y: y as f32 * self.pixel_size + self.thickness / 2.0, 
+                iced::Point {
+                    x: x as f32 * self.pixel_size + self.thickness / 2.0,
+                    y: y as f32 * self.pixel_size + self.thickness / 2.0,
                 },
                 Size {
                     width: self.pixel_size + self.thickness,

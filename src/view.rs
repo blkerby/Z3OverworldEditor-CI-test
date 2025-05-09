@@ -1,16 +1,13 @@
-mod palette;
-mod tiles;
 mod graphics;
+mod palette;
 mod screen;
+mod tiles;
 
 use std::path::PathBuf;
 
 use graphics::graphics_view;
 use iced::{
-    widget::{
-        center, column, container, mouse_area, opaque, row, stack,
-        Space,
-    },
+    widget::{center, column, container, mouse_area, opaque, row, stack, Space},
     Element, Length, Theme,
 };
 use iced_aw::quad;
@@ -30,7 +27,6 @@ pub async fn open_project() -> Option<PathBuf> {
         .await;
     picked_dir.map(|x| x.path().to_owned())
 }
-
 
 fn modal<'a, Message>(
     base: impl Into<Element<'a, Message>>,
@@ -94,7 +90,8 @@ pub fn view(state: &EditorState) -> Element<Message> {
             palette_view(&state),
             graphics_view(&state),
             tile_view(&state),
-        ].width(400)
+        ]
+        .width(400)
     ]
     .spacing(0)
     .width(Length::Fill)
@@ -120,7 +117,11 @@ pub fn view(state: &EditorState) -> Element<Message> {
                 main_view = modal(main_view, add_screen_view(name, *size), Message::HideModal);
             }
             Dialogue::RenameScreen { name } => {
-                main_view = modal(main_view, rename_screen_view(state, name), Message::HideModal);
+                main_view = modal(
+                    main_view,
+                    rename_screen_view(state, name),
+                    Message::HideModal,
+                );
             }
             Dialogue::DeleteScreen => {
                 main_view = modal(main_view, delete_screen_view(state), Message::HideModal);

@@ -1,17 +1,23 @@
 use hashbrown::HashMap;
 use iced::{
-    alignment::Vertical, mouse, widget::{
-        button, canvas, column, container, pick_list, row, scrollable::{self, Direction, Scrollbar}, text, text_input, Scrollable, Space
-    }, Element, Length, Padding, Point, Rectangle, Size
+    alignment::Vertical,
+    mouse,
+    widget::{
+        button, canvas, column, container, pick_list, row,
+        scrollable::{self, Direction, Scrollbar},
+        text, text_input, Scrollable, Space,
+    },
+    Element, Length, Padding, Point, Rectangle, Size,
 };
 use iced_aw::number_input;
 use log::info;
 
-use crate::{message::Message, state::{scale_color, EditorState, Palette, Screen}};
+use crate::{
+    message::Message,
+    state::{scale_color, EditorState, Palette, Screen},
+};
 
 use super::modal_background_style;
-
-
 
 // We use two separate canvases: one for drawing the tile raster and one for the tile selection.
 // This is to work around a limitation in Iced's rendering pipeline that does not allow drawing
@@ -97,12 +103,17 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
         let mut color_bytes: Vec<Option<Vec<[u8; 4]>>> = vec![];
 
         for i in 0..self.screen.palettes.len() {
-            let idx = self.palettes_name_idx_map.get(&self.screen.palettes[i]).map(|x| *x);
+            let idx = self
+                .palettes_name_idx_map
+                .get(&self.screen.palettes[i])
+                .map(|x| *x);
             palette_idxs.push(idx);
             if let Some(j) = idx {
-                let cb = self.palettes[j].colors.iter().map(|&(r, g, b)| 
-                    [scale_color(r), scale_color(g), scale_color(b), 255]
-                ).collect();
+                let cb = self.palettes[j]
+                    .colors
+                    .iter()
+                    .map(|&(r, g, b)| [scale_color(r), scale_color(g), scale_color(b), 255])
+                    .collect();
                 color_bytes.push(Some(cb));
             } else {
                 color_bytes.push(None);
@@ -126,7 +137,8 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                             // info!("{} {} {} {}",sx,sy,tx,ty);
                             let tile = self.palettes[idx].tiles[tile_idx as usize];
                             let cb = color_bytes[idx].as_ref().unwrap();
-                            let mut tile_addr = subscreen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
+                            let mut tile_addr =
+                                subscreen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
                             for py in 0..8 {
                                 let mut addr = tile_addr;
                                 for px in 0..8 {
@@ -135,7 +147,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                                     addr += 4;
                                 }
                                 tile_addr += row_stride;
-                            }    
+                            }
                         } else {
                             // TODO: draw some indicator of the broken tile (due to invalid palette reference)
                         }
@@ -249,7 +261,7 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
 
     Scrollable::with_direction(
         column![
-        // stack![
+            // stack![
             canvas(ScreenGrid {
                 screen: &state.screen,
                 palettes: &state.palettes,
@@ -267,16 +279,18 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
             // })
             // .width(384 + 2)
             // .height((num_rows * 8 * 3 + 4) as f32)
-        // ],    
-        ].padding(Padding::new(0.0).right(15.0).bottom(15.0)),
-        Direction::Both { vertical: Scrollbar::default(), horizontal: Scrollbar::default() }
+            // ],
+        ]
+        .padding(Padding::new(0.0).right(15.0).bottom(15.0)),
+        Direction::Both {
+            vertical: Scrollbar::default(),
+            horizontal: Scrollbar::default(),
+        },
     )
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
 }
-
-
 
 pub fn screen_view(state: &EditorState) -> Element<Message> {
     let col = column![
@@ -325,20 +339,24 @@ pub fn add_screen_view(name: &String, size: (u8, u8)) -> Element<Message> {
             row![
                 text("Name: ").width(70),
                 text_input("", name)
-                .id("AddScreen")
-                .on_input(Message::SetAddScreenName)
-                .on_submit(Message::AddScreen)
-            ].spacing(10).align_y(Vertical::Center),
+                    .id("AddScreen")
+                    .on_input(Message::SetAddScreenName)
+                    .on_submit(Message::AddScreen)
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
             row![
                 text("Size: ").width(70),
                 number_input(&size.0, 1..=8, Message::SetAddScreenSizeX)
-                .width(50)
-                .on_submit(Message::AddScreen),
+                    .width(50)
+                    .on_submit(Message::AddScreen),
                 text(" by "),
                 number_input(&size.1, 1..=8, Message::SetAddScreenSizeY)
-                .width(50)
-                .on_submit(Message::AddScreen),
-            ].spacing(10).align_y(Vertical::Center),
+                    .width(50)
+                    .on_submit(Message::AddScreen),
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
             button(text("Add screen"))
                 .style(button::success)
                 .on_press(Message::AddScreen),
@@ -359,10 +377,12 @@ pub fn rename_screen_view(state: &EditorState, name: &String) -> Element<'static
             row![
                 text("Name: ").width(70),
                 text_input("", name)
-                .id("RenameScreen")
-                .on_input(Message::SetRenameScreenName)
-                .on_submit(Message::RenameScreen)
-            ].spacing(10).align_y(Vertical::Center),
+                    .id("RenameScreen")
+                    .on_input(Message::SetRenameScreenName)
+                    .on_submit(Message::RenameScreen)
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
             row![
                 button(text("Rename screen")).on_press(Message::RenameScreen),
                 Space::with_width(Length::Fill),
