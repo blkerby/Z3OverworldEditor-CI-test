@@ -97,6 +97,7 @@ impl Screen {
 }
 
 pub enum Dialogue {
+    Settings,
     AddPalette { name: String, id: u8 },
     RenamePalette { name: String },
     DeletePalette,

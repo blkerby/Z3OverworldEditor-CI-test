@@ -13,10 +13,13 @@ pub enum SelectionSource {
 #[derive(Debug, Clone)]
 pub enum Message {
     Event(iced::Event),
-    SaveProject,
     WindowOpen(iced::window::Id),
     WindowClose(iced::window::Id),
+    SaveProject,
+    OpenProject,
     ProjectOpened(Option<PathBuf>),
+    SettingsDialogue,
+    CloseDialogue,
     SelectPalette(String),
     AddPaletteDialogue,
     SetAddPaletteName(String),

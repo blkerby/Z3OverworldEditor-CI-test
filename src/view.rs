@@ -1,3 +1,4 @@
+mod settings;
 mod graphics;
 mod palette;
 mod screen;
@@ -7,15 +8,16 @@ use std::path::PathBuf;
 
 use graphics::graphics_view;
 use iced::{
-    widget::{center, column, container, mouse_area, opaque, row, stack},
+    widget::{button, center, column, container, mouse_area, opaque, row, stack, text},
     Element, Length, Theme,
 };
 use iced_aw::quad;
 use palette::{add_palette_view, delete_palette_view, palette_view, rename_palette_view};
 use screen::{
     add_screen_view, add_theme_view, delete_screen_view, delete_theme_view, rename_screen_view,
-    rename_theme_view, screen_view,
+    rename_theme_view, screen_controls, screen_grid_view,
 };
+use settings::settings_view;
 use tiles::tile_view;
 
 use crate::{
@@ -87,14 +89,18 @@ fn vertical_separator() -> quad::Quad {
 
 pub fn view(state: &EditorState) -> Element<Message> {
     let mut main_view: Element<Message> = row![
-        screen_view(&state),
-        vertical_separator(),
         column![
-            palette_view(&state),
-            graphics_view(&state),
-            tile_view(&state),
+            row![
+                button(text("\u{F3E2}").font(iced_fonts::BOOTSTRAP_FONT)).style(button::secondary).on_press(Message::SettingsDialogue),
+                screen_controls(state),
+            ]
+            .spacing(10),
+            screen_grid_view(state),
         ]
-        .width(420)
+        .padding(10)
+        .spacing(10),
+        vertical_separator(),
+        column![palette_view(state), graphics_view(state), tile_view(state),].width(420)
     ]
     .spacing(0)
     .width(Length::Fill)
@@ -103,6 +109,9 @@ pub fn view(state: &EditorState) -> Element<Message> {
 
     if let Some(dialogue) = &state.dialogue {
         match dialogue {
+            Dialogue::Settings => {
+                main_view = modal(main_view, settings_view(state), Message::HideModal);
+            }
             Dialogue::AddPalette { name, id } => {
                 main_view = modal(main_view, add_palette_view(name, *id), Message::HideModal);
             }

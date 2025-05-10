@@ -88,6 +88,7 @@ fn load_palettes(state: &mut EditorState) -> Result<()> {
     }
     if state.palettes.len() == 0 {
         let mut pal = Palette::default();
+        pal.modified = true;
         pal.name = "Default".to_string();
         pal.tiles = vec![[[0; 8]; 8]; 16];
         state.palettes.push(pal);

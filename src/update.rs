@@ -13,7 +13,7 @@ use crate::{
     },
     state::{
         Dialogue, EditorState, PaletteId, Screen, Subscreen, Tile, TileBlock, TileCoord, TileIdx,
-    },
+    }, view::open_project,
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
@@ -114,6 +114,9 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 error!("Error saving project: {}\n{}", e, e.backtrace());
             }
         }
+        Message::OpenProject => {
+            return Task::perform(open_project(), Message::ProjectOpened);
+        }
         Message::WindowOpen(id) => {
             return window::maximize(id, true);
         }
@@ -155,6 +158,12 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                     }
                 }
             }
+        }
+        Message::SettingsDialogue => {
+            state.dialogue = Some(Dialogue::Settings);
+        }
+        Message::CloseDialogue => {
+            state.dialogue = None;
         }
         Message::SelectPalette(name) => {
             for i in 0..state.palettes.len() {
@@ -369,6 +378,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                     }
                 }
             }
+            state.palettes[state.palette_idx].modified = true;
         }
         // Message::ClickTile(idx) => {
         //     if state.brush_mode {
@@ -740,6 +750,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                         .set_tile(p.x + x, p.y + y, s.tiles[y as usize][x as usize]);
                 }
             }
+            state.screen.modified = true;
         }
     }
     Task::none()

@@ -435,44 +435,37 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
     .into()
 }
 
-pub fn screen_view(state: &EditorState) -> Element<Message> {
-    let col = column![
-        row![
-            text("Screen"),
-            pick_list(
-                state.screen_names.clone(),
-                Some(state.screen.name.clone()),
-                Message::SelectScreen
-            )
-            .width(200),
-            button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
-                .style(button::success)
-                .on_press(Message::AddScreenDialogue),
-            button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
-                .on_press(Message::RenameScreenDialogue),
-            text("Theme"),
-            pick_list(
-                state.theme_names.clone(),
-                Some(state.screen.theme.clone()),
-                Message::SelectTheme
-            )
-            .width(200),
-            button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
-                .style(button::success)
-                .on_press(Message::AddThemeDialogue),
-            button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
-                .on_press(Message::RenameThemeDialogue),
-        ]
-        .spacing(10)
-        .clip(true)
-        .align_y(iced::alignment::Vertical::Center),
-        screen_grid_view(state),
+pub fn screen_controls(state: &EditorState) -> Element<Message> {
+    row![
+        text("Screen"),
+        pick_list(
+            state.screen_names.clone(),
+            Some(state.screen.name.clone()),
+            Message::SelectScreen
+        )
+        .width(200),
+        button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
+            .style(button::success)
+            .on_press(Message::AddScreenDialogue),
+        button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
+            .on_press(Message::RenameScreenDialogue),
+        text("Theme"),
+        pick_list(
+            state.theme_names.clone(),
+            Some(state.screen.theme.clone()),
+            Message::SelectTheme
+        )
+        .width(200),
+        button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
+            .style(button::success)
+            .on_press(Message::AddThemeDialogue),
+        button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
+            .on_press(Message::RenameThemeDialogue),
     ]
     .spacing(10)
-    .padding(10)
-    .width(Length::Fill);
-
-    col.into()
+    .clip(true)
+    .align_y(iced::alignment::Vertical::Center)
+    .into()
 }
 
 pub fn add_screen_view(name: &String, size: (u8, u8)) -> Element<Message> {
