@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use iced::{Subscription, Task, Theme};
+use iced::{Size, Subscription, Task, Theme};
 use message::Message;
 use state::EditorState;
 
@@ -20,7 +20,6 @@ fn theme(_state: &EditorState) -> Theme {
 
 fn subscription(_state: &EditorState) -> Subscription<Message> {
     Subscription::batch(vec![
-        iced::window::open_events().map(Message::WindowOpen),
         iced::window::close_requests().map(Message::WindowClose),
         iced::time::every(Duration::from_secs(1)).map(|_| Message::SaveProject),
         iced::event::listen().map(Message::Event),
@@ -44,6 +43,10 @@ pub fn main() -> Result<()> {
         .theme(theme)
         .exit_on_close_request(false)
         .subscription(subscription)
+        .window_size(Size {
+            width: 1440.0,
+            height: 960.0,
+        })
         .run_with(|| (editor_state, initial_task))?;
     Ok(())
 }

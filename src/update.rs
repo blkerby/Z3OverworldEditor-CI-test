@@ -19,6 +19,11 @@ use crate::{
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
+    if state.global_config.project_dir.is_none() {
+        let Message::ProjectOpened(_) = &message else {
+            return Task::none();
+        };
+    }
     match message {
         Message::Event(event) => match event {
             Event::Keyboard(keyboard::Event::KeyPressed {
@@ -131,9 +136,6 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::OpenProject => {
             return Task::perform(open_project(), Message::ProjectOpened);
-        }
-        Message::WindowOpen(id) => {
-            return window::maximize(id, true);
         }
         Message::WindowClose(id) => {
             if let Err(e) = persist::save_project(state) {
@@ -372,19 +374,6 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::TilesetBrush(Point { x: x0, y: y0 }) => {
             let s = &state.selected_tile_block;
-            if state.selected_gfx.is_empty() {
-                for y in 0..s.size.1 {
-                    let mut gfx_row: Vec<Tile> = vec![];
-                    for x in 0..s.size.0 {
-                        let palette_id = s.palettes[y as usize][x as usize];
-                        let palette_idx = state.palettes_id_idx_map[&palette_id];
-                        let tile_idx = s.tiles[y as usize][x as usize];
-                        let tile = state.palettes[palette_idx].tiles[tile_idx as usize];
-                        gfx_row.push(tile);
-                    }
-                    state.selected_gfx.push(gfx_row);
-                }
-            }
             for y in 0..s.size.1 {
                 for x in 0..s.size.0 {
                     let y1 = y + y0;
@@ -755,6 +744,19 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 palettes,
                 tiles,
             };
+            let s = &state.selected_tile_block;
+            state.selected_gfx.clear();
+            for y in 0..s.size.1 {
+                let mut gfx_row: Vec<Tile> = vec![];
+                for x in 0..s.size.0 {
+                    let palette_id = s.palettes[y as usize][x as usize];
+                    let palette_idx = state.palettes_id_idx_map[&palette_id];
+                    let tile_idx = s.tiles[y as usize][x as usize];
+                    let tile = state.palettes[palette_idx].tiles[tile_idx as usize];
+                    gfx_row.push(tile);
+                }
+                state.selected_gfx.push(gfx_row);
+            }
         }
         Message::ScreenBrush(p) => {
             let s = &state.selected_tile_block;

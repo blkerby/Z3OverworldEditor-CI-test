@@ -10,7 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Serializer;
 
 use crate::{
-    state::{EditorState, Palette, Subscreen},
+    state::{ensure_palettes_non_empty, ensure_screens_non_empty, ensure_themes_non_empty, EditorState, Palette, Subscreen},
     update::update_palette_order,
 };
 
@@ -86,13 +86,7 @@ fn load_palettes(state: &mut EditorState) -> Result<()> {
         pal.name = name.to_owned();
         state.palettes.push(pal);
     }
-    if state.palettes.len() == 0 {
-        let mut pal = Palette::default();
-        pal.modified = true;
-        pal.name = "Default".to_string();
-        pal.tiles = vec![[[0; 8]; 8]; 16];
-        state.palettes.push(pal);
-    }
+    ensure_palettes_non_empty(state);
     update_palette_order(state);
     state.palette_idx = 0;
     Ok(())
@@ -124,26 +118,9 @@ pub fn load_screen_list(state: &mut EditorState) -> Result<()> {
         state.theme_names.push(theme_name.to_string());
         state.screen_names.push(screen_name.into_string().unwrap());
     }
-    if state.theme_names.len() == 0 {
-        state.theme_names.push("Base".to_string());
-    }
-    if state.screen_names.len() == 0 {
-        state.screen_names.push("Example".to_string());
-        state.screen.name = "Example".to_string();
-        state.screen.theme = "Base".to_string();
-        state.screen.size = (2, 2);
-        for y in 0..2 {
-            for x in 0..2 {
-                state.screen.subscreens.push(Subscreen {
-                    position: (x, y),
-                    palettes: [[0; 32]; 32],
-                    tiles: [[0; 32]; 32],
-                });
-            }
-        }
-        state.screen.modified = true;
-        save_screen(state)?;
-    }
+    ensure_themes_non_empty(state);
+    ensure_screens_non_empty(state);
+    save_screen(state)?;
     state.screen_names.sort();
     state.screen_names.dedup();
     state.theme_names.sort();

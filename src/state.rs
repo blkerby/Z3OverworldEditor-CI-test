@@ -172,8 +172,43 @@ fn get_global_config_path() -> Result<PathBuf> {
     Ok(config_path)
 }
 
+pub fn ensure_themes_non_empty(state: &mut EditorState) {
+    if state.theme_names.len() == 0 {
+        state.theme_names.push("Base".to_string());
+    }
+}
+
+pub fn ensure_screens_non_empty(state: &mut EditorState) {
+    if state.screen_names.len() == 0 {
+        state.screen_names.push("Example".to_string());
+        state.screen.name = "Example".to_string();
+        state.screen.theme = "Base".to_string();
+        state.screen.size = (2, 2);
+        for y in 0..2 {
+            for x in 0..2 {
+                state.screen.subscreens.push(Subscreen {
+                    position: (x, y),
+                    palettes: [[0; 32]; 32],
+                    tiles: [[0; 32]; 32],
+                });
+            }
+        }
+        state.screen.modified = true;
+    }
+}
+
+pub fn ensure_palettes_non_empty(state: &mut EditorState) {
+    if state.palettes.len() == 0 {
+        let mut pal = Palette::default();
+        pal.modified = true;
+        pal.name = "Default".to_string();
+        pal.tiles = vec![[[0; 8]; 8]; 16];
+        state.palettes.push(pal);
+    }
+}
+
 pub fn get_initial_state() -> Result<EditorState> {
-    let mut editor_state = EditorState {
+    let mut state = EditorState {
         global_config_path: get_global_config_path()?,
         global_config: GlobalConfig {
             modified: false,
@@ -199,15 +234,18 @@ pub fn get_initial_state() -> Result<EditorState> {
         dialogue: None,
         palettes_id_idx_map: HashMap::new(),
     };
-    match persist::load_global_config(&mut editor_state) {
+    match persist::load_global_config(&mut state) {
         Ok(_) => {
-            persist::load_project(&mut editor_state)?;
+            persist::load_project(&mut state)?;
         }
         Err(err) => {
             info!("Unable to load global config, using default: {}", err);
         }
     }
-    Ok(editor_state)
+    ensure_themes_non_empty(&mut state);
+    ensure_screens_non_empty(&mut state);
+    ensure_palettes_non_empty(&mut state);
+    Ok(state)
 }
 
 pub fn scale_color(c: u8) -> u8 {

@@ -1,14 +1,14 @@
-mod settings;
 mod graphics;
 mod palette;
 mod screen;
+mod settings;
 mod tiles;
 
 use std::path::PathBuf;
 
 use graphics::graphics_view;
 use iced::{
-    widget::{button, center, column, container, mouse_area, opaque, row, stack, text},
+    widget::{button, center, column, container, mouse_area, opaque, row, stack, text, Space},
     Element, Length, Theme,
 };
 use iced_aw::quad;
@@ -88,10 +88,15 @@ fn vertical_separator() -> quad::Quad {
 }
 
 pub fn view(state: &EditorState) -> Element<Message> {
+    if state.global_config.project_dir.is_none() {
+        return Space::new(Length::Fill, Length::Fill).into();
+    }
     let mut main_view: Element<Message> = row![
         column![
             row![
-                button(text("\u{F3E2}").font(iced_fonts::BOOTSTRAP_FONT)).style(button::secondary).on_press(Message::SettingsDialogue),
+                button(text("\u{F3E2}").font(iced_fonts::BOOTSTRAP_FONT))
+                    .style(button::secondary)
+                    .on_press(Message::SettingsDialogue),
                 screen_controls(state),
             ]
             .spacing(10),

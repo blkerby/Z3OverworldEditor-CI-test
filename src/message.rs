@@ -13,7 +13,6 @@ pub enum SelectionSource {
 #[derive(Debug, Clone)]
 pub enum Message {
     Event(iced::Event),
-    WindowOpen(iced::window::Id),
     WindowClose(iced::window::Id),
     SaveProject,
     OpenProject,
