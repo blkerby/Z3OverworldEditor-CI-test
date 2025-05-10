@@ -19,6 +19,7 @@ struct ColorBox {
     r: f32,
     g: f32,
     b: f32,
+    thickness: f32,
     selected: bool,
     brush_mode: bool,
     color_idx: ColorIdx,
@@ -66,7 +67,7 @@ impl canvas::Program<Message> for ColorBox {
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
 
-        let thickness = 1.0;
+        let thickness = self.thickness;
         let size = Size {
             width: frame.size().width - 2.0 * thickness,
             height: frame.size().height - 2.0 * thickness - 1.0,
@@ -139,6 +140,7 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
                 r: pal.colors[i].0 as f32 / 31.0,
                 g: pal.colors[i].1 as f32 / 31.0,
                 b: pal.colors[i].2 as f32 / 31.0,
+                thickness: 2.0,
                 selected: Some(i as ColorIdx) == state.color_idx,
                 brush_mode: state.brush_mode,
                 color_idx: i as ColorIdx,

@@ -38,6 +38,9 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 state.dialogue = None;
                 state.color_idx = None;
                 state.tile_idx = None;
+                state.selected_gfx = vec![];
+                state.start_coords = None;
+                state.end_coords = None;    
             }
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(key::Named::ArrowRight),
@@ -724,9 +727,6 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 palettes,
                 tiles,
             };
-            state.selected_gfx = vec![];
-            state.start_coords = None;
-            state.end_coords = None;
         }
         Message::ScreenBrush(p) => {
             let s = &state.selected_tile_block;

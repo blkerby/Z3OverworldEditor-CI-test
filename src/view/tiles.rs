@@ -8,6 +8,7 @@ use iced::{
     },
     Element, Length, Point, Rectangle, Size,
 };
+use log::info;
 
 use crate::{
     message::{Message, SelectionSource},
@@ -21,6 +22,7 @@ use crate::{
 struct TileGrid<'a> {
     palette: &'a Palette,
     pixel_size: f32,
+    end_coords: Option<(TileCoord, TileCoord)>,
     thickness: f32,
     brush_mode: bool,
 }
@@ -85,17 +87,22 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                     let state0 = *state;
                     *state = InternalState::None;
                     if !self.brush_mode && state0 == InternalState::Selecting {
-                        if let Some(p) = cursor.position() {
-                            return (
-                                canvas::event::Status::Captured,
-                                Some(Message::EndScreenSelection(clamped_position_in(
-                                    p,
-                                    bounds,
-                                    self.palette.tiles.len() / 16,
-                                    self.pixel_size,
-                                ))),
-                            );
-                        }
+                        let coords = if let Some(p) = cursor.position() {
+                            clamped_position_in(
+                                p,
+                                bounds,
+                                self.palette.tiles.len() / 16,
+                                self.pixel_size,
+                            )
+                        } else if let Some(c) = self.end_coords {
+                            Point::new(c.0, c.1)
+                        } else {
+                            return (canvas::event::Status::Ignored, None);
+                        };
+                        return (
+                            canvas::event::Status::Captured,
+                            Some(Message::EndScreenSelection(coords)),
+                        );
                     }
                 }
                 mouse::Event::CursorMoved { .. } => {
@@ -230,7 +237,7 @@ impl canvas::Program<Message> for TileSelect {
         &self,
         _state: &(),
         renderer: &iced::Renderer,
-        theme: &iced::Theme,
+        _theme: &iced::Theme,
         bounds: iced::Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
@@ -241,27 +248,35 @@ impl canvas::Program<Message> for TileSelect {
 
         let pixel_size = self.pixel_size;
 
-        let x0 = self.left as f32 * pixel_size * 8.0 + 0.5;
-        let x1 = (self.right + 1) as f32 * pixel_size * 8.0 - 0.5;
-        let y0 = self.top as f32 * pixel_size * 8.0 + 0.5;
-        let y1 = (self.bottom + 1) as f32 * pixel_size * 8.0 - 1.0;
-        let border_color = if theme.extended_palette().is_dark {
-            iced::Color::WHITE
-        } else {
-            iced::Color::BLACK
-        };
-        frame.stroke_rectangle(
+        let x0 = self.left as f32 * pixel_size * 8.0 + self.thickness * 0.5;
+        let x1 = (self.right + 1) as f32 * pixel_size * 8.0 + self.thickness * 0.5;
+        let y0 = self.top as f32 * pixel_size * 8.0 + self.thickness * 0.5;
+        let y1 = (self.bottom + 1) as f32 * pixel_size * 8.0 + self.thickness * 0.5;
+        let path = canvas::Path::rectangle(
             iced::Point { x: x0, y: y0 },
             Size {
                 width: x1 - x0,
                 height: y1 - y0,
             },
-            canvas::Stroke {
-                width: 1.0,
-                style: border_color.into(),
-                ..Default::default()
-            },
         );
+        for i in 0..2 {
+            frame.stroke(
+                &path,
+                canvas::Stroke {
+                    style: if i == 0 {
+                        canvas::stroke::Style::Solid(iced::Color::WHITE)
+                    } else {
+                        canvas::stroke::Style::Solid(iced::Color::BLACK)
+                    },
+                    width: self.thickness,
+                    line_dash: canvas::LineDash {
+                        offset: i,
+                        segments: &[0.0, 0.0, 4.0, 4.0],
+                    },
+                    ..Default::default()
+                },
+            );    
+        }
         vec![frame.into_geometry()]
     }
 
@@ -282,6 +297,7 @@ impl canvas::Program<Message> for TileSelect {
 pub fn tile_view(state: &EditorState) -> Element<Message> {
     let num_cols = 16;
     let num_rows = (state.palettes[state.palette_idx].tiles.len() + num_cols - 1) / num_cols;
+    let pixel_size = 3;
 
     let mut left = 0;
     let mut right = 0;
@@ -314,29 +330,31 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
             column![stack![
                 canvas(TileGrid {
                     palette: &state.palettes[state.palette_idx],
-                    pixel_size: 3.0,
+                    pixel_size: pixel_size as f32,
+                    end_coords: state.end_coords,
                     thickness: 1.0,
                     brush_mode: state.brush_mode,
                 })
-                .width(384 + 2)
-                .height((num_rows * 8 * 3 + 4) as f32),
+                .width(384 + 4)
+                .height((num_rows * 8 * pixel_size + 4) as f32),
                 canvas(TileSelect {
                     active: state.selection_source == SelectionSource::Tileset
                         && state.start_coords.is_some()
-                        && state.end_coords.is_some(),
+                        && state.end_coords.is_some()
+                        && !state.brush_mode,
                     left,
                     right,
                     top,
                     bottom,
-                    pixel_size: 3.0,
+                    pixel_size: pixel_size as f32,
                     thickness: 1.0,
                 })
-                .width(384 + 2)
-                .height((num_rows * 8 * 3 + 4) as f32)
+                .width(384 + 4)
+                .height((num_rows * 8 * pixel_size + 4) as f32)
             ],],
             Direction::Vertical(Scrollbar::default())
         )
-        .width(400)
+        .width(420)
         .height(Length::Fill),
     ]
     .spacing(5);

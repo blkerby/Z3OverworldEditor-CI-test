@@ -94,7 +94,7 @@ pub fn view(state: &EditorState) -> Element<Message> {
             graphics_view(&state),
             tile_view(&state),
         ]
-        .width(400)
+        .width(420)
     ]
     .spacing(0)
     .width(Length::Fill)

@@ -1,5 +1,4 @@
 Some features still needed:
-- Select/brush screen data
 - Select/brush multiple palette colors at once
 - Swap tiles (within and between palettes), updating screen data
 - Undo
