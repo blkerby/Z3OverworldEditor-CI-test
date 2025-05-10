@@ -13,7 +13,7 @@ use iced::{
 use iced_aw::number_input;
 
 use crate::{
-    message::Message,
+    message::{Message, SelectionSource},
     state::{scale_color, EditorState, Palette, PaletteId, Screen, TileCoord},
 };
 
@@ -77,11 +77,10 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                             *state = InternalState::Selecting;
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::StartScreenSelection(clamped_position_in(
-                                    p,
-                                    bounds,
-                                    self.pixel_size,
-                                ))),
+                                Some(Message::StartScreenSelection(
+                                    clamped_position_in(p, bounds, self.pixel_size),
+                                    crate::message::SelectionSource::MainScreen,
+                                )),
                             );
                         }
                     };
@@ -326,7 +325,9 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
             .width(num_cols as f32 * 8.0 * pixel_size)
             .height(num_rows as f32 * 8.0 * pixel_size),
             canvas(ScreenSelect {
-                active: state.start_coords.is_some() && state.end_coords.is_some(),
+                active: state.selection_source == SelectionSource::MainScreen
+                    && state.start_coords.is_some()
+                    && state.end_coords.is_some(),
                 left,
                 right,
                 top,

@@ -4,6 +4,12 @@ use iced::Point;
 
 use crate::state::{ColorIdx, ColorValue, PixelCoord, TileCoord, TileIdx};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SelectionSource {
+    MainScreen,
+    Tileset,
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     Event(iced::Event),
@@ -28,7 +34,8 @@ pub enum Message {
     ChangeBlue(ColorValue),
     AddTileRow,
     DeleteTileRow,
-    ClickTile(TileIdx),
+    // ClickTile(TileIdx),
+    TilesetBrush(Point<TileCoord>),
     ClickPixel(PixelCoord, PixelCoord),
     SelectScreen(String),
     AddScreenDialogue,
@@ -50,7 +57,7 @@ pub enum Message {
     RenameTheme,
     DeleteThemeDialogue,
     DeleteTheme,
-    StartScreenSelection(Point<TileCoord>),
+    StartScreenSelection(Point<TileCoord>, SelectionSource),
     ProgressScreenSelection(Point<TileCoord>),
     EndScreenSelection(Point<TileCoord>),
     ScreenBrush(Point<TileCoord>),

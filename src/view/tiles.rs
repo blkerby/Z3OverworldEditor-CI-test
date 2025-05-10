@@ -10,8 +10,8 @@ use iced::{
 };
 
 use crate::{
-    message::Message,
-    state::{EditorState, Palette, TileIdx},
+    message::{Message, SelectionSource},
+    state::{EditorState, Palette, TileCoord, TileIdx},
 };
 
 // We use two separate canvases: one for drawing the tile raster and one for the tile selection.
@@ -25,9 +25,21 @@ struct TileGrid<'a> {
     brush_mode: bool,
 }
 
-#[derive(Default)]
-struct InternalState {
-    clicking: bool,
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+enum InternalState {
+    #[default]
+    None,
+    Selecting,
+    Brushing,
+}
+
+fn clamped_position_in(p: Point, bounds: iced::Rectangle, rows: usize, pixel_size: f32) -> Point<TileCoord> {
+    let x = (f32::max(p.x - bounds.x, 0.0) / (8.0 * pixel_size)) as TileCoord;
+    let y = (f32::max(p.y - bounds.y, 0.0) / (8.0 * pixel_size)) as TileCoord;
+    Point {
+        x: x.min(15),
+        y: y.min(rows as TileCoord - 1),
+    }
 }
 
 impl<'a> canvas::Program<Message> for TileGrid<'a> {
@@ -40,44 +52,82 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> (canvas::event::Status, Option<Message>) {
-        let Some(p) = cursor.position_in(bounds) else {
-            return (canvas::event::Status::Ignored, None);
-        };
-
-        let mut click: bool = false;
         match event {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    state.clicking = true;
-                    click = true;
+                    if let Some(p) = cursor.position_over(bounds) {
+                        if self.brush_mode {
+                            *state = InternalState::Brushing;
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::TilesetBrush(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.palette.tiles.len() / 16,
+                                    self.pixel_size,
+                                ))),
+                            );
+                        } else {
+                            *state = InternalState::Selecting;
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::StartScreenSelection(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.palette.tiles.len() / 16,
+                                    self.pixel_size,
+                                ), crate::message::SelectionSource::Tileset)),
+                            );
+                        }
+                    };
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) => {
-                    state.clicking = false;
-                }
-                mouse::Event::CursorMoved { .. } => {
-                    if state.clicking {
-                        click = true;
+                    let state0 = *state;
+                    *state = InternalState::None;
+                    if !self.brush_mode && state0 == InternalState::Selecting {
+                        if let Some(p) = cursor.position() {
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::EndScreenSelection(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.palette.tiles.len() / 16,
+                                    self.pixel_size,
+                                ))),
+                            );
+                        }
                     }
                 }
-                mouse::Event::CursorLeft => {
-                    state.clicking = false;
+                mouse::Event::CursorMoved { .. } => {
+                    if !self.brush_mode && *state == InternalState::Selecting {
+                        if let Some(p) = cursor.position() {
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::ProgressScreenSelection(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.palette.tiles.len() / 16,
+                                    self.pixel_size,
+                                ))),
+                            );
+                        }
+                    } else if self.brush_mode && *state == InternalState::Brushing {
+                        if let Some(p) = cursor.position() {
+                            return (
+                                canvas::event::Status::Captured,
+                                Some(Message::TilesetBrush(clamped_position_in(
+                                    p,
+                                    bounds,
+                                    self.palette.tiles.len() / 16,
+                                    self.pixel_size,
+                                ))),
+                            );
+                        }
+                    }
                 }
                 _ => {}
             },
             _ => {}
-        }
-
-        if click {
-            let y = ((p.y - 1.0) / (self.pixel_size * 8.0)) as i32;
-            let x = ((p.x - 1.0) / (self.pixel_size * 8.0)) as i32;
-            if x < 0 || x >= 16 {
-                return (canvas::event::Status::Ignored, None);
-            }
-            let i = y * 16 + x;
-            if i >= 0 && i < self.palette.tiles.len() as i32 {
-                let message = Some(Message::ClickTile(i as TileIdx));
-                return (canvas::event::Status::Captured, message);
-            }
         }
         (canvas::event::Status::Ignored, None)
     }
@@ -163,7 +213,11 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
 }
 
 struct TileSelect {
-    tile_idx: Option<TileIdx>,
+    top: TileCoord,
+    bottom: TileCoord,
+    left: TileCoord,
+    right: TileCoord,
+    active: bool,
     pixel_size: f32,
     thickness: f32,
 }
@@ -180,33 +234,34 @@ impl canvas::Program<Message> for TileSelect {
         bounds: iced::Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let pixel_size = self.pixel_size;
-        let thickness = self.thickness;
-        let num_cols = 16;
-
-        if let Some(idx) = self.tile_idx {
-            let y = (idx / num_cols) as f32 * pixel_size * 8.0 + thickness / 2.0;
-            let x = (idx % num_cols) as f32 * pixel_size * 8.0 + thickness / 2.0;
-            let border_color = if theme.extended_palette().is_dark {
-                iced::Color::WHITE
-            } else {
-                iced::Color::BLACK
-            };
-            let size = Size {
-                width: 8.0 * pixel_size as f32 + thickness,
-                height: 8.0 * pixel_size as f32 + thickness,
-            };
-            frame.stroke_rectangle(
-                iced::Point { x, y },
-                size,
-                canvas::Stroke {
-                    width: thickness,
-                    style: border_color.into(),
-                    ..Default::default()
-                },
-            );
+        if !self.active {
+            return vec![];
         }
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+
+        let pixel_size = self.pixel_size;
+
+        let x0 = self.left as f32 * pixel_size * 8.0 + 0.5;
+        let x1 = (self.right + 1) as f32 * pixel_size * 8.0 - 0.5;
+        let y0 = self.top as f32 * pixel_size * 8.0 + 0.5;
+        let y1 = (self.bottom + 1) as f32 * pixel_size * 8.0 - 1.0;
+        let border_color = if theme.extended_palette().is_dark {
+            iced::Color::WHITE
+        } else {
+            iced::Color::BLACK
+        };
+        frame.stroke_rectangle(
+            iced::Point { x: x0, y: y0 },
+            Size {
+                width: x1 - x0,
+                height: y1 - y0,
+            },
+            canvas::Stroke {
+                width: 1.0,
+                style: border_color.into(),
+                ..Default::default()
+            },
+        );
         vec![frame.into_geometry()]
     }
 
@@ -227,6 +282,21 @@ impl canvas::Program<Message> for TileSelect {
 pub fn tile_view(state: &EditorState) -> Element<Message> {
     let num_cols = 16;
     let num_rows = (state.palettes[state.palette_idx].tiles.len() + num_cols - 1) / num_cols;
+
+    let mut left = 0;
+    let mut right = 0;
+    let mut top = 0;
+    let mut bottom = 0;
+
+    match (state.start_coords, state.end_coords) {
+        (Some(p0), Some(p1)) => {
+            left = p0.0.min(p1.0);
+            right = p0.0.max(p1.0);
+            top = p0.1.min(p1.1);
+            bottom = p0.1.max(p1.1);
+        }
+        _ => {}
+    }
 
     let col = column![
         row![
@@ -251,7 +321,13 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
                 .width(384 + 2)
                 .height((num_rows * 8 * 3 + 4) as f32),
                 canvas(TileSelect {
-                    tile_idx: state.tile_idx,
+                    active: state.selection_source == SelectionSource::Tileset
+                        && state.start_coords.is_some()
+                        && state.end_coords.is_some(),
+                    left,
+                    right,
+                    top,
+                    bottom,
                     pixel_size: 3.0,
                     thickness: 1.0,
                 })

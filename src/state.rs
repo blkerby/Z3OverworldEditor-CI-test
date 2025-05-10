@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::persist;
+use crate::{message::SelectionSource, persist};
 
 pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
@@ -78,12 +78,18 @@ impl Screen {
     }
 
     pub fn set_tile(&mut self, x: TileCoord, y: TileCoord, tile_idx: TileIdx) {
+        if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
+            return;
+        }
         let subscreen_i = self.get_subscreen(x, y);
         self.subscreens[subscreen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize] =
             tile_idx;
     }
 
     pub fn set_palette(&mut self, x: TileCoord, y: TileCoord, palette_id: PaletteId) {
+        if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
+            return;
+        }
         let subscreen_i = self.get_subscreen(x, y);
         self.subscreens[subscreen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize] =
             palette_id;
@@ -135,9 +141,11 @@ pub struct EditorState {
     pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
 
     // Screen editing state:
+    pub selection_source: SelectionSource,
     pub start_coords: Option<(TileCoord, TileCoord)>,
     pub end_coords: Option<(TileCoord, TileCoord)>,
     pub selected_tile_block: TileBlock,
+    pub selected_gfx: Vec<Vec<Tile>>,
 
     // Other editor state:
     pub dialogue: Option<Dialogue>,
@@ -168,9 +176,11 @@ pub fn get_initial_state() -> Result<EditorState> {
         selected_color: (0, 0, 0),
         tile_idx: None,
         selected_tile: [[0; 8]; 8],
+        selection_source: SelectionSource::MainScreen,
         start_coords: None,
         end_coords: None,
         selected_tile_block: TileBlock::default(),
+        selected_gfx: vec![],
         pixel_coords: None,
         dialogue: None,
         palettes_id_idx_map: HashMap::new(),

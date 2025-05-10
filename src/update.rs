@@ -1,17 +1,19 @@
 use iced::{
     keyboard::{self, key},
-    widget, window, Event, Task,
+    widget, window, Event, Point, Task,
 };
 use itertools::Itertools;
 use log::{error, info, warn};
 
 use crate::{
-    message::Message,
+    message::{Message, SelectionSource},
     persist::{
         self, copy_screen_theme, delete_palette, delete_screen, delete_screen_theme, load_screen,
         load_screen_list, rename_screen, rename_screen_theme, save_screen,
     },
-    state::{Dialogue, EditorState, PaletteId, Screen, Subscreen, TileBlock, TileCoord, TileIdx},
+    state::{
+        Dialogue, EditorState, PaletteId, Screen, Subscreen, Tile, TileBlock, TileCoord, TileIdx,
+    },
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
@@ -338,16 +340,43 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             }
             state.palettes[state.palette_idx].modified = true;
         }
-        Message::ClickTile(idx) => {
-            if state.brush_mode {
-                state.palettes[state.palette_idx].tiles[idx as usize] = state.selected_tile;
-                state.palettes[state.palette_idx].modified = true;
-            } else {
-                state.tile_idx = Some(idx);
-                state.selected_tile = state.palettes[state.palette_idx].tiles[idx as usize];
-                state.pixel_coords = None
+        Message::TilesetBrush(Point { x: x0, y: y0 }) => {
+            let s = &state.selected_tile_block;
+            if state.selected_gfx.is_empty() {
+                for y in 0..s.size.1 {
+                    let mut gfx_row: Vec<Tile> = vec![];
+                    for x in 0..s.size.0 {
+                        let palette_id = s.palettes[y as usize][x as usize];
+                        let palette_idx = state.palettes_id_idx_map[&palette_id];
+                        let tile_idx = s.tiles[y as usize][x as usize];
+                        let tile = state.palettes[palette_idx].tiles[tile_idx as usize];
+                        gfx_row.push(tile);
+                    }
+                    state.selected_gfx.push(gfx_row);
+                }
+            }
+            for y in 0..s.size.1 {
+                for x in 0..s.size.0 {
+                    let y1 = y + y0;
+                    let x1 = x + x0;
+                    let i = (y1 * 16 + x1) as usize;
+                    if i < state.palettes[state.palette_idx].tiles.len() {
+                        state.palettes[state.palette_idx].tiles[i] =
+                            state.selected_gfx[y as usize][x as usize];
+                    }
+                }
             }
         }
+        // Message::ClickTile(idx) => {
+        //     if state.brush_mode {
+        //         state.palettes[state.palette_idx].tiles[idx as usize] = state.selected_tile;
+        //         state.palettes[state.palette_idx].modified = true;
+        //     } else {
+        //         state.tile_idx = Some(idx);
+        //         state.selected_tile = state.palettes[state.palette_idx].tiles[idx as usize];
+        //         state.pixel_coords = None
+        //     }
+        // }
         Message::ClickPixel(x, y) => {
             state.pixel_coords = Some((x, y));
             if let Some(tile_idx) = state.tile_idx {
@@ -636,7 +665,8 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             }
             state.dialogue = None;
         }
-        Message::StartScreenSelection(p) => {
+        Message::StartScreenSelection(p, source) => {
+            state.selection_source = source;
             state.start_coords = Some((p.x, p.y));
             state.end_coords = Some((p.x, p.y));
         }
@@ -648,6 +678,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             let Some(p0) = state.start_coords else {
                 return Task::none();
             };
+
             let left = p0.0.min(p1.0);
             let right =
                 p0.0.max(p1.0)
@@ -656,14 +687,34 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             let bottom =
                 p0.1.max(p1.1)
                     .min(state.screen.size.1 as TileCoord * 32 - 1);
+
+            match state.selection_source {
+                SelectionSource::MainScreen => {}
+                SelectionSource::Tileset => {
+                    if left == right && top == bottom {
+                        let idx = p1.1 * 16 + p1.0;
+                        state.tile_idx = Some(idx);
+                        state.selected_tile = state.palettes[state.palette_idx].tiles[idx as usize];
+                    }
+                }
+            }
+
             let mut palettes: Vec<Vec<PaletteId>> = vec![];
             let mut tiles: Vec<Vec<TileIdx>> = vec![];
             for y in top..=bottom {
                 let mut pal_row: Vec<PaletteId> = vec![];
                 let mut tile_row: Vec<TileIdx> = vec![];
                 for x in left..=right {
-                    pal_row.push(state.screen.get_palette(x, y));
-                    tile_row.push(state.screen.get_tile(x, y));
+                    match state.selection_source {
+                        SelectionSource::MainScreen => {
+                            pal_row.push(state.screen.get_palette(x, y));
+                            tile_row.push(state.screen.get_tile(x, y));
+                        }
+                        SelectionSource::Tileset => {
+                            pal_row.push(state.palettes[state.palette_idx].id);
+                            tile_row.push(y * 16 + x);
+                        }
+                    }
                 }
                 palettes.push(pal_row);
                 tiles.push(tile_row);
@@ -673,6 +724,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 palettes,
                 tiles,
             };
+            state.selected_gfx = vec![];
             state.start_coords = None;
             state.end_coords = None;
         }
