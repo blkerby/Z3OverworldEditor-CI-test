@@ -32,6 +32,15 @@ pub struct GlobalConfig {
     #[serde(skip_serializing, skip_deserializing)]
     pub modified: bool,
     pub project_dir: Option<PathBuf>,
+    #[serde(default = "default_pixel_size")]
+    pub pixel_size: f32,
+}
+
+pub const MIN_PIXEL_SIZE: f32 = 1.0;
+pub const MAX_PIXEL_SIZE: f32 = 8.0;
+
+fn default_pixel_size() -> f32 {
+    3.0
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -166,7 +175,11 @@ fn get_global_config_path() -> Result<PathBuf> {
 pub fn get_initial_state() -> Result<EditorState> {
     let mut editor_state = EditorState {
         global_config_path: get_global_config_path()?,
-        global_config: GlobalConfig::default(),
+        global_config: GlobalConfig {
+            modified: false,
+            project_dir: None,
+            pixel_size: 3.0,
+        },
         palettes: vec![],
         screen: Screen::default(),
         screen_names: vec![],

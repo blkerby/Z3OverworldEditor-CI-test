@@ -4,7 +4,6 @@ Some features still needed:
 - Undo
 - Import from ROM: palettes, tiles, and screens
 - Way to open a second screen/scratch in side panel (instead of palette/tileset editor)
-- Zoom
 - Collision data
 - World editor
 - Export to ROM

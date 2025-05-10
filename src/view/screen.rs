@@ -378,7 +378,7 @@ impl canvas::Program<Message> for ScreenSelect {
 pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
     let num_cols = state.screen.size.1 * 32;
     let num_rows = state.screen.size.0 * 32;
-    let pixel_size = 3.0;
+    let pixel_size = state.global_config.pixel_size;
 
     let mut left = 0;
     let mut right = 0;

@@ -13,7 +13,9 @@ use crate::{
     },
     state::{
         Dialogue, EditorState, PaletteId, Screen, Subscreen, Tile, TileBlock, TileCoord, TileIdx,
-    }, view::open_project,
+        MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
+    },
+    view::open_project,
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
@@ -40,7 +42,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 state.tile_idx = None;
                 state.selected_gfx = vec![];
                 state.start_coords = None;
-                state.end_coords = None;    
+                state.end_coords = None;
             }
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(key::Named::ArrowRight),
@@ -100,13 +102,26 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                     }
                 }
             }
-            Event::Keyboard(keyboard::Event::KeyPressed { modified_key, .. }) => {
-                if modified_key == keyboard::Key::Character("b".into()) {
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                modified_key: keyboard::Key::Character(c),
+                ..
+            }) => match c.as_str() {
+                "b" => {
                     state.brush_mode = true;
-                } else if modified_key == keyboard::Key::Character("s".into()) {
+                }
+                "s" => {
                     state.brush_mode = false;
                 }
-            }
+                "-" => {
+                    state.global_config.pixel_size =
+                        (state.global_config.pixel_size - 1.0).max(MIN_PIXEL_SIZE);
+                }
+                "=" => {
+                    state.global_config.pixel_size =
+                        (state.global_config.pixel_size + 1.0).min(MAX_PIXEL_SIZE);
+                }
+                _ => {}
+            },
             _ => {}
         },
         Message::SaveProject => {
@@ -161,6 +176,9 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::SettingsDialogue => {
             state.dialogue = Some(Dialogue::Settings);
+        }
+        Message::SetPixelSize(pixel_size) => {
+            state.global_config.pixel_size = pixel_size;
         }
         Message::CloseDialogue => {
             state.dialogue = None;

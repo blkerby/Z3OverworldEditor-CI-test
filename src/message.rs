@@ -19,6 +19,7 @@ pub enum Message {
     OpenProject,
     ProjectOpened(Option<PathBuf>),
     SettingsDialogue,
+    SetPixelSize(f32),
     CloseDialogue,
     SelectPalette(String),
     AddPaletteDialogue,
