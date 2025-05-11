@@ -199,23 +199,26 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                 for ty in 0..32 {
                     for tx in 0..32 {
                         let palette_id = subscreen.palettes[ty][tx];
-                        if let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) {
-                            let tile_idx = subscreen.tiles[ty][tx];
-                            let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
-                            let cb = &color_bytes[palette_idx];
-                            let mut tile_addr =
-                                subscreen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
-                            for py in 0..8 {
-                                let mut addr = tile_addr;
-                                for px in 0..8 {
-                                    let color_idx = tile[py][px];
-                                    data[addr..(addr + 4)].copy_from_slice(&cb[color_idx as usize]);
-                                    addr += 4;
-                                }
-                                tile_addr += row_stride;
-                            }
-                        } else {
+                        let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) else {
                             // TODO: draw some indicator of the broken tile (due to invalid palette reference)
+                            continue;
+                        };
+                        let tile_idx = subscreen.tiles[ty][tx];
+                        if tile_idx as usize >= self.palettes[palette_idx].tiles.len() {
+                            continue;
+                        }
+                        let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
+                        let cb = &color_bytes[palette_idx];
+                        let mut tile_addr =
+                            subscreen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
+                        for py in 0..8 {
+                            let mut addr = tile_addr;
+                            for px in 0..8 {
+                                let color_idx = tile[py][px];
+                                data[addr..(addr + 4)].copy_from_slice(&cb[color_idx as usize]);
+                                addr += 4;
+                            }
+                            tile_addr += row_stride;
                         }
                     }
                 }
@@ -224,7 +227,11 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
 
         if self.brush_mode {
             // Overlay the block to be pasted/brushed onto the screen:
-            if let Some(Point { x: base_x, y: base_y }) = state.coords {
+            if let Some(Point {
+                x: base_x,
+                y: base_y,
+            }) = state.coords
+            {
                 let base_addr =
                     (base_y * 8 + 1) as usize * row_stride + (base_x * 8 + 1) as usize * col_stride;
                 let alpha = 0.75;

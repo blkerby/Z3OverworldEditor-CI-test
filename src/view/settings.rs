@@ -1,6 +1,6 @@
 use iced::{
     alignment::Vertical,
-    widget::{button, column, container, row, slider, text, text_input},
+    widget::{button, column, container, horizontal_space, row, slider, text, text_input},
     Element, Length,
 };
 use iced_aw::number_input;
@@ -44,11 +44,17 @@ pub fn settings_view(state: &EditorState) -> Element<Message> {
             ]
             .spacing(10)
             .align_y(Vertical::Center),
-            row![button("Close")
-                .style(button::secondary)
-                .on_press(Message::CloseDialogue)]
+            row![
+                button("Close")
+                    .style(button::secondary)
+                    .on_press(Message::CloseDialogue),
+                horizontal_space(),
+                button("Import from ROM")
+                    .style(button::danger)
+                    .on_press(Message::ImportDialogue)
+            ]
         ]
-        .spacing(15),
+        .spacing(20),
     )
     .width(600)
     .padding(25)

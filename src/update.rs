@@ -6,16 +6,17 @@ use itertools::Itertools;
 use log::{error, info, warn};
 
 use crate::{
+    import::import_from_rom,
     message::{Message, SelectionSource},
     persist::{
-        self, copy_screen_theme, delete_palette, delete_screen, delete_screen_theme, load_screen,
-        load_screen_list, rename_screen, rename_screen_theme, save_screen,
+        self, copy_screen_theme, delete_palette, delete_screen, delete_screen_theme, load_project,
+        load_screen, load_screen_list, rename_screen, rename_screen_theme, save_screen,
     },
     state::{
         Dialogue, EditorState, PaletteId, Screen, Subscreen, Tile, TileBlock, TileCoord, TileIdx,
         MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
     },
-    view::open_project,
+    view::{open_project, open_rom},
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
@@ -167,6 +168,8 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                         error!("Error loading project: {}\n{}", e, e.backtrace());
                         return Task::none();
                     }
+
+                    state.dialogue = None;
                 }
                 None => {
                     if state.global_config.project_dir.is_none() {
@@ -184,6 +187,25 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::CloseDialogue => {
             state.dialogue = None;
+        }
+        Message::ImportDialogue => {
+            return Task::perform(open_rom(), Message::ImportConfirm);
+        }
+        Message::ImportConfirm(path) => {
+            state.rom_path = path;
+            state.dialogue = Some(Dialogue::ImportROM);
+        }
+        Message::ImportROM => {
+            if let Some(path) = &state.rom_path {
+                if let Err(e) = import_from_rom(state, &path.clone()) {
+                    error!("Error importing from ROM: {}\n{}", e, e.backtrace());
+                    return Task::none();
+                }
+                if let Err(e) = load_project(state) {
+                    error!("Error loading project: {}\n{}", e, e.backtrace());
+                }
+                state.dialogue = None;
+            }
         }
         Message::SelectPalette(name) => {
             for i in 0..state.palettes.len() {
@@ -700,13 +722,9 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             };
 
             let left = p0.0.min(p1.0);
-            let right =
-                p0.0.max(p1.0)
-                    .min(state.screen.size.0 as TileCoord * 32 - 1);
+            let right = p0.0.max(p1.0);
             let top = p0.1.min(p1.1);
-            let bottom =
-                p0.1.max(p1.1)
-                    .min(state.screen.size.1 as TileCoord * 32 - 1);
+            let bottom = p0.1.max(p1.1);
 
             match state.selection_source {
                 SelectionSource::MainScreen => {}

@@ -21,14 +21,22 @@ use settings::settings_view;
 use tiles::tile_view;
 
 use crate::{
-    message::Message,
-    state::{Dialogue, EditorState},
+    import::import_rom_view, message::Message, state::{Dialogue, EditorState}
 };
 
 pub async fn open_project() -> Option<PathBuf> {
     let picked_dir = rfd::AsyncFileDialog::new()
         .set_title("Select new or existing project folder ...")
         .pick_folder()
+        .await;
+    picked_dir.map(|x| x.path().to_owned())
+}
+
+pub async fn open_rom() -> Option<PathBuf> {
+    let picked_dir = rfd::AsyncFileDialog::new()
+        .set_title("Select a ROM ...")
+        .add_filter("SNES ROM", &["sfc", "smc"])
+        .pick_file()
         .await;
     picked_dir.map(|x| x.path().to_owned())
 }
@@ -62,7 +70,7 @@ where
     .into()
 }
 
-fn modal_background_style(theme: &Theme) -> container::Style {
+pub fn modal_background_style(theme: &Theme) -> container::Style {
     let palette = theme.extended_palette();
     container::Style {
         background: Some(palette.background.base.color.into()),
@@ -155,6 +163,9 @@ pub fn view(state: &EditorState) -> Element<Message> {
             }
             Dialogue::DeleteTheme => {
                 main_view = modal(main_view, delete_theme_view(state), Message::HideModal);
+            }
+            Dialogue::ImportROM => {
+                main_view = modal(main_view, import_rom_view(state), Message::HideModal);
             }
         }
     }

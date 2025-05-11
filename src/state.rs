@@ -107,6 +107,7 @@ impl Screen {
 
 pub enum Dialogue {
     Settings,
+    ImportROM,
     AddPalette { name: String, id: u8 },
     RenamePalette { name: String },
     DeletePalette,
@@ -134,6 +135,9 @@ pub struct EditorState {
     pub screen: Screen,
     pub screen_names: Vec<String>,
     pub theme_names: Vec<String>,
+
+    // Settings-related data:
+    pub rom_path: Option<PathBuf>,
 
     // General editing state:
     pub brush_mode: bool,
@@ -215,6 +219,7 @@ pub fn get_initial_state() -> Result<EditorState> {
             project_dir: None,
             pixel_size: 3.0,
         },
+        rom_path: None,
         palettes: vec![],
         screen: Screen::default(),
         screen_names: vec![],

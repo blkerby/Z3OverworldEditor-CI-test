@@ -5,6 +5,7 @@ use iced::{Size, Subscription, Task, Theme};
 use message::Message;
 use state::EditorState;
 
+mod import;
 mod message;
 mod persist;
 mod state;

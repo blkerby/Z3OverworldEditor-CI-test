@@ -28,14 +28,25 @@ struct TileGrid<'a> {
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
-enum InternalState {
+enum InternalStateAction {
     #[default]
     None,
     Selecting,
     Brushing,
 }
 
-fn clamped_position_in(p: Point, bounds: iced::Rectangle, rows: usize, pixel_size: f32) -> Point<TileCoord> {
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+struct InternalState {
+    action: InternalStateAction,
+    coords: Option<Point<TileCoord>>,
+}
+
+fn clamped_position_in(
+    p: Point,
+    bounds: iced::Rectangle,
+    rows: usize,
+    pixel_size: f32,
+) -> Point<TileCoord> {
     let x = (f32::max(p.x - bounds.x, 0.0) / (8.0 * pixel_size)) as TileCoord;
     let y = (f32::max(p.y - bounds.y, 0.0) / (8.0 * pixel_size)) as TileCoord;
     Point {
@@ -54,12 +65,20 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> (canvas::event::Status, Option<Message>) {
+        if let Some(p) = cursor.position_over(bounds) {
+            state.coords = Some(clamped_position_in(
+                p,
+                bounds,
+                self.palette.tiles.len() / 16,
+                self.pixel_size,
+            ));
+        }
         match event {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
                     if let Some(p) = cursor.position_over(bounds) {
                         if self.brush_mode {
-                            *state = InternalState::Brushing;
+                            state.action = InternalStateAction::Brushing;
                             return (
                                 canvas::event::Status::Captured,
                                 Some(Message::TilesetBrush(clamped_position_in(
@@ -70,23 +89,26 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                                 ))),
                             );
                         } else {
-                            *state = InternalState::Selecting;
+                            state.action = InternalStateAction::Selecting;
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::StartScreenSelection(clamped_position_in(
-                                    p,
-                                    bounds,
-                                    self.palette.tiles.len() / 16,
-                                    self.pixel_size,
-                                ), crate::message::SelectionSource::Tileset)),
+                                Some(Message::StartScreenSelection(
+                                    clamped_position_in(
+                                        p,
+                                        bounds,
+                                        self.palette.tiles.len() / 16,
+                                        self.pixel_size,
+                                    ),
+                                    crate::message::SelectionSource::Tileset,
+                                )),
                             );
                         }
                     };
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) => {
                     let state0 = *state;
-                    *state = InternalState::None;
-                    if !self.brush_mode && state0 == InternalState::Selecting {
+                    state.action = InternalStateAction::None;
+                    if !self.brush_mode && state0.action == InternalStateAction::Selecting {
                         let coords = if let Some(p) = cursor.position() {
                             clamped_position_in(
                                 p,
@@ -106,7 +128,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                     }
                 }
                 mouse::Event::CursorMoved { .. } => {
-                    if !self.brush_mode && *state == InternalState::Selecting {
+                    if !self.brush_mode && state.action == InternalStateAction::Selecting {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
@@ -118,7 +140,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                                 ))),
                             );
                         }
-                    } else if self.brush_mode && *state == InternalState::Brushing {
+                    } else if self.brush_mode && state.action == InternalStateAction::Brushing {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
@@ -141,7 +163,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
 
     fn draw(
         &self,
-        _state: &InternalState,
+        state: &InternalState,
         renderer: &iced::Renderer,
         _theme: &iced::Theme,
         bounds: iced::Rectangle,
@@ -182,6 +204,46 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                 data.extend(color_bytes[color_idx as usize]);
             }
         }
+
+        // if self.brush_mode {
+        //     // Overlay the block to be pasted/brushed onto the screen:
+        //     if let Some(Point { x: base_x, y: base_y }) = state.coords {
+        //         let base_addr =
+        //             (base_y * 8 + 1) as usize * row_stride + (base_x * 8 + 1) as usize * col_stride;
+        //         let alpha = 0.75;
+        //         let gamma = 2.2;
+        //         for ty in 0..self.tile_block.size.1 as usize {
+        //             for tx in 0..self.tile_block.size.0 as usize {
+        //                 let palette_id = self.tile_block.palettes[ty][tx];
+        //                 if let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) {
+        //                     let tile_idx = self.tile_block.tiles[ty][tx];
+        //                     let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
+        //                     let cb = &color_bytes[palette_idx];
+        //                     let mut tile_addr =
+        //                         base_addr + ty * 8 * row_stride + tx * 8 * col_stride;
+        //                     for py in 0..8 {
+        //                         let mut addr = tile_addr;
+        //                         for px in 0..8 {
+        //                             let color_idx = tile[py][px];
+        //                             for k in 0..3 {
+        //                                 let old_color_val = data[addr + k] as f32;
+        //                                 let new_color_val = cb[color_idx as usize][k] as f32;
+        //                                 let blended_color_val = f32::powf(
+        //                                     (1.0 - alpha) * f32::powf(old_color_val, gamma)
+        //                                         + alpha * f32::powf(new_color_val, gamma),
+        //                                     1.0 / gamma,
+        //                                 );
+        //                                 data[addr + k] = blended_color_val as u8;
+        //                             }
+        //                             addr += 4;
+        //                         }
+        //                         tile_addr += row_stride;
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         let image = iced::advanced::image::Image::new(iced::advanced::image::Handle::from_rgba(
             (num_cols * 8) as u32,
@@ -275,7 +337,7 @@ impl canvas::Program<Message> for TileSelect {
                     },
                     ..Default::default()
                 },
-            );    
+            );
         }
         vec![frame.into_geometry()]
     }

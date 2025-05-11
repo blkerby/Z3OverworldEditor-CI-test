@@ -1,8 +1,7 @@
 Some features still needed:
-- Select/brush multiple palette colors at once
+- Import from ROM: palettes, tiles, and screens
 - Swap tiles (within and between palettes), updating screen data
 - Undo
-- Import from ROM: palettes, tiles, and screens
 - Way to open a second screen/scratch in side panel (instead of palette/tileset editor)
 - Collision data
 - World editor
