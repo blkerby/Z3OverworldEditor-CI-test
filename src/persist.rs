@@ -10,7 +10,10 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Serializer;
 
 use crate::{
-    state::{ensure_palettes_non_empty, ensure_screens_non_empty, ensure_themes_non_empty, EditorState, Palette, Subscreen},
+    state::{
+        ensure_areas_non_empty, ensure_palettes_non_empty, ensure_themes_non_empty, EditorState,
+        Palette,
+    },
     update::update_palette_order,
 };
 
@@ -100,115 +103,115 @@ pub fn delete_palette(state: &mut EditorState, name: &str) -> Result<()> {
     Ok(())
 }
 
-fn get_screen_dir(state: &EditorState) -> Result<PathBuf> {
-    Ok(get_project_dir(state)?.join("Screens"))
+fn get_area_dir(state: &EditorState) -> Result<PathBuf> {
+    Ok(get_project_dir(state)?.join("Areas"))
 }
 
-pub fn load_screen_list(state: &mut EditorState) -> Result<()> {
-    let screen_dir = get_screen_dir(state)?;
+pub fn load_area_list(state: &mut EditorState) -> Result<()> {
+    let area_dir = get_area_dir(state)?;
 
-    let pattern = format!("{}/*/*.json", screen_dir.display());
+    let pattern = format!("{}/*/*.json", area_dir.display());
     state.theme_names.clear();
-    state.screen_names.clear();
+    state.area_names.clear();
     for entry in glob::glob(&pattern)? {
         let path = entry?;
         let theme_name = path.file_stem().unwrap().to_str().unwrap();
         let parent_path = path.parent().unwrap();
-        let screen_name = parent_path.file_name().unwrap().to_owned();
+        let area_name = parent_path.file_name().unwrap().to_owned();
         state.theme_names.push(theme_name.to_string());
-        state.screen_names.push(screen_name.into_string().unwrap());
+        state.area_names.push(area_name.into_string().unwrap());
     }
     ensure_themes_non_empty(state);
-    ensure_screens_non_empty(state);
-    save_screen(state)?;
-    state.screen_names.sort();
-    state.screen_names.dedup();
+    ensure_areas_non_empty(state);
+    save_area(state)?;
+    state.area_names.sort();
+    state.area_names.dedup();
     state.theme_names.sort();
     state.theme_names.dedup();
     Ok(())
 }
 
-pub fn load_screen(state: &mut EditorState, name: &str, theme: &str) -> Result<()> {
-    let screen_path = get_screen_dir(state)?
+pub fn load_area(state: &mut EditorState, name: &str, theme: &str) -> Result<()> {
+    let area_path = get_area_dir(state)?
         .join(name)
         .join(format!("{}.json", theme));
-    state.screen = load_json(&screen_path)?;
-    state.screen.name = name.to_owned();
-    state.screen.theme = theme.to_owned();
+    state.area = load_json(&area_path)?;
+    state.area.name = name.to_owned();
+    state.area.theme = theme.to_owned();
     Ok(())
 }
 
-pub fn save_screen(state: &mut EditorState) -> Result<()> {
-    let screen_dir = get_screen_dir(state)?;
-    if state.screen.modified {
-        let screen_filename = format!("{}.json", state.screen.theme);
-        let screen_path = screen_dir.join(&state.screen.name).join(screen_filename);
-        save_json(&screen_path, &state.screen)?;
-        state.screen.modified = false;
+pub fn save_area(state: &mut EditorState) -> Result<()> {
+    let area_dir = get_area_dir(state)?;
+    if state.area.modified {
+        let area_filename = format!("{}.json", state.area.theme);
+        let area_path = area_dir.join(&state.area.name).join(area_filename);
+        save_json(&area_path, &state.area)?;
+        state.area.modified = false;
     }
     Ok(())
 }
 
-pub fn copy_screen_theme(
+pub fn copy_area_theme(
     state: &mut EditorState,
     name: &str,
     old_theme: &str,
     new_theme: &str,
 ) -> Result<()> {
-    let screen_dir = get_screen_dir(state)?.join(name);
-    let old_screen_path = screen_dir.join(format!("{}.json", old_theme));
-    let new_screen_path = screen_dir.join(format!("{}.json", new_theme));
+    let area_dir = get_area_dir(state)?.join(name);
+    let old_area_path = area_dir.join(format!("{}.json", old_theme));
+    let new_area_path = area_dir.join(format!("{}.json", new_theme));
     info!(
         "Copying {} to {}",
-        old_screen_path.display(),
-        new_screen_path.display()
+        old_area_path.display(),
+        new_area_path.display()
     );
-    std::fs::copy(old_screen_path, new_screen_path)?;
+    std::fs::copy(old_area_path, new_area_path)?;
     Ok(())
 }
 
-pub fn rename_screen(state: &mut EditorState, new_name: &str) -> Result<()> {
-    let old_screen_path = get_screen_dir(state)?.join(&state.screen.name);
-    let new_screen_path = get_screen_dir(state)?.join(new_name);
+pub fn rename_area(state: &mut EditorState, new_name: &str) -> Result<()> {
+    let old_area_path = get_area_dir(state)?.join(&state.area.name);
+    let new_area_path = get_area_dir(state)?.join(new_name);
     info!(
         "Renaming {} to {} (directory)",
-        old_screen_path.display(),
-        new_screen_path.display()
+        old_area_path.display(),
+        new_area_path.display()
     );
-    std::fs::rename(old_screen_path, new_screen_path)?;
+    std::fs::rename(old_area_path, new_area_path)?;
     Ok(())
 }
 
-pub fn rename_screen_theme(
+pub fn rename_area_theme(
     state: &EditorState,
-    screen_name: &str,
+    area_name: &str,
     old_theme: &str,
     new_theme: &str,
 ) -> Result<()> {
-    let screen_dir = get_screen_dir(state)?.join(screen_name);
-    let old_screen_path = screen_dir.join(format!("{}.json", old_theme));
-    let new_screen_path = screen_dir.join(format!("{}.json", new_theme));
+    let area_dir = get_area_dir(state)?.join(area_name);
+    let old_area_path = area_dir.join(format!("{}.json", old_theme));
+    let new_area_path = area_dir.join(format!("{}.json", new_theme));
     info!(
         "Renaming {} to {}",
-        old_screen_path.display(),
-        new_screen_path.display()
+        old_area_path.display(),
+        new_area_path.display()
     );
-    std::fs::rename(old_screen_path, new_screen_path)?;
+    std::fs::rename(old_area_path, new_area_path)?;
     Ok(())
 }
 
-pub fn delete_screen(state: &mut EditorState, name: &str) -> Result<()> {
-    let screen_path = get_screen_dir(state)?.join(name);
-    info!("Deleting {}", screen_path.display());
-    std::fs::remove_dir_all(screen_path)?;
+pub fn delete_area(state: &mut EditorState, name: &str) -> Result<()> {
+    let area_path = get_area_dir(state)?.join(name);
+    info!("Deleting {}", area_path.display());
+    std::fs::remove_dir_all(area_path)?;
     Ok(())
 }
 
-pub fn delete_screen_theme(state: &mut EditorState, screen_name: &str, theme: &str) -> Result<()> {
-    let screen_dir = get_screen_dir(state)?.join(screen_name);
-    let screen_path = screen_dir.join(format!("{}.json", theme));
-    info!("Deleting {}", screen_path.display());
-    std::fs::remove_file(screen_path)?;
+pub fn delete_area_theme(state: &mut EditorState, area_name: &str, theme: &str) -> Result<()> {
+    let area_dir = get_area_dir(state)?.join(area_name);
+    let area_path = area_dir.join(format!("{}.json", theme));
+    info!("Deleting {}", area_path.display());
+    std::fs::remove_file(area_path)?;
     Ok(())
 }
 
@@ -217,16 +220,16 @@ pub fn save_project(state: &mut EditorState) -> Result<()> {
         return Ok(());
     }
     save_palettes(state)?;
-    save_screen(state)?;
+    save_area(state)?;
     Ok(())
 }
 
 pub fn load_project(state: &mut EditorState) -> Result<()> {
     load_palettes(state)?;
-    load_screen_list(state)?;
-    load_screen(
+    load_area_list(state)?;
+    load_area(
         state,
-        &state.screen_names[0].clone(),
+        &state.area_names[0].clone(),
         &state.theme_names[0].clone(),
     )?;
     Ok(())

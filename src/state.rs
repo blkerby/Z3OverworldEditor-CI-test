@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use hashbrown::HashMap;
 use log::info;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
 pub type PaletteId = u8; // ID of the palette
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
-pub type TileCoord = u16; // Index into screen: number of 8x8 tiles from top-left corner
+pub type TileCoord = u16; // Index into area: number of 8x8 tiles from top-left corner
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
 pub type Tile = [[ColorIdx; 8]; 8];
 
@@ -43,18 +44,29 @@ fn default_pixel_size() -> f32 {
     3.0
 }
 
-#[derive(Serialize, Deserialize, Default)]
-pub struct Subscreen {
-    // X and Y position of the subscreen within the screen, in subscreen counts
-    // The subscreens are always listed in row-major order, so `position` is
-    // redundant; its onlu purpose is to improve readability of the JSON.
-    pub position: (u8, u8),
-    pub palettes: [[PaletteId; 32]; 32],
-    pub tiles: [[TileIdx; 32]; 32],
+#[derive(Serialize_repr, Deserialize_repr, Default)]
+#[repr(u8)]
+pub enum Flip {
+    #[default]
+    None = 0,
+    Horizontal = 1,
+    Vertical = 2,
+    Both = 3,
 }
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Screen {
+    // X and Y position of the screen (256 x 256 block) within the area, in screen counts:
+    // The screens are always listed in row-major order, so `position` is
+    // redundant; its only purpose is to improve readability of the JSON.
+    pub position: (u8, u8),
+    pub palettes: [[PaletteId; 32]; 32],
+    pub tiles: [[TileIdx; 32]; 32],
+    // pub flips: [[Flip; 32]; 32],
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct Area {
     #[serde(skip_serializing, skip_deserializing)]
     pub modified: bool,
     #[serde(skip_serializing, skip_deserializing)]
@@ -65,43 +77,41 @@ pub struct Screen {
     pub size: (u8, u8),
     // A 'subscreen' is a 256x256 pixel section, roughly the size that fits on camera at once.
     // Splitting it up like this helps with formatting of the JSON, e.g. for viewing git diffs.
-    pub subscreens: Vec<Subscreen>,
+    pub screens: Vec<Screen>,
 }
 
-impl Screen {
-    pub fn get_subscreen(&self, x: TileCoord, y: TileCoord) -> usize {
-        let subscreen_x = (x / 32) as usize;
-        let subscreen_y = (y / 32) as usize;
-        let subscreen_i = subscreen_y * self.size.0 as usize + subscreen_x;
-        subscreen_i
+impl Area {
+    pub fn get_screen(&self, x: TileCoord, y: TileCoord) -> usize {
+        let screen_x = (x / 32) as usize;
+        let screen_y = (y / 32) as usize;
+        let screen_i = screen_y * self.size.0 as usize + screen_x;
+        screen_i
     }
 
     pub fn get_tile(&self, x: TileCoord, y: TileCoord) -> TileIdx {
-        let subscreen_i = self.get_subscreen(x, y);
-        self.subscreens[subscreen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize]
+        let screen_i = self.get_screen(x, y);
+        self.screens[screen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize]
     }
 
     pub fn get_palette(&self, x: TileCoord, y: TileCoord) -> PaletteId {
-        let subscreen_i = self.get_subscreen(x, y);
-        self.subscreens[subscreen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize]
+        let screen_i = self.get_screen(x, y);
+        self.screens[screen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize]
     }
 
     pub fn set_tile(&mut self, x: TileCoord, y: TileCoord, tile_idx: TileIdx) {
         if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
             return;
         }
-        let subscreen_i = self.get_subscreen(x, y);
-        self.subscreens[subscreen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize] =
-            tile_idx;
+        let screen_i = self.get_screen(x, y);
+        self.screens[screen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize] = tile_idx;
     }
 
     pub fn set_palette(&mut self, x: TileCoord, y: TileCoord, palette_id: PaletteId) {
         if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
             return;
         }
-        let subscreen_i = self.get_subscreen(x, y);
-        self.subscreens[subscreen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize] =
-            palette_id;
+        let screen_i = self.get_screen(x, y);
+        self.screens[screen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize] = palette_id;
     }
 }
 
@@ -111,9 +121,9 @@ pub enum Dialogue {
     AddPalette { name: String, id: u8 },
     RenamePalette { name: String },
     DeletePalette,
-    AddScreen { name: String, size: (u8, u8) },
-    RenameScreen { name: String },
-    DeleteScreen,
+    AddArea { name: String, size: (u8, u8) },
+    RenameArea { name: String },
+    DeleteArea,
     AddTheme { name: String },
     RenameTheme { name: String },
     DeleteTheme,
@@ -132,8 +142,8 @@ pub struct EditorState {
 
     // Project data:
     pub palettes: Vec<Palette>,
-    pub screen: Screen,
-    pub screen_names: Vec<String>,
+    pub area: Area,
+    pub area_names: Vec<String>,
     pub theme_names: Vec<String>,
 
     // Settings-related data:
@@ -154,7 +164,7 @@ pub struct EditorState {
     // Graphics editing state:
     pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
 
-    // Screen editing state:
+    // Area editing state:
     pub selection_source: SelectionSource,
     pub start_coords: Option<(TileCoord, TileCoord)>,
     pub end_coords: Option<(TileCoord, TileCoord)>,
@@ -182,22 +192,22 @@ pub fn ensure_themes_non_empty(state: &mut EditorState) {
     }
 }
 
-pub fn ensure_screens_non_empty(state: &mut EditorState) {
-    if state.screen_names.len() == 0 {
-        state.screen_names.push("Example".to_string());
-        state.screen.name = "Example".to_string();
-        state.screen.theme = "Base".to_string();
-        state.screen.size = (2, 2);
+pub fn ensure_areas_non_empty(state: &mut EditorState) {
+    if state.area_names.len() == 0 {
+        state.area_names.push("Example".to_string());
+        state.area.name = "Example".to_string();
+        state.area.theme = "Base".to_string();
+        state.area.size = (2, 2);
         for y in 0..2 {
             for x in 0..2 {
-                state.screen.subscreens.push(Subscreen {
+                state.area.screens.push(Screen {
                     position: (x, y),
                     palettes: [[0; 32]; 32],
                     tiles: [[0; 32]; 32],
                 });
             }
         }
-        state.screen.modified = true;
+        state.area.modified = true;
     }
 }
 
@@ -221,8 +231,8 @@ pub fn get_initial_state() -> Result<EditorState> {
         },
         rom_path: None,
         palettes: vec![],
-        screen: Screen::default(),
-        screen_names: vec![],
+        area: Area::default(),
+        area_names: vec![],
         theme_names: vec![],
         brush_mode: false,
         palette_idx: 0,
@@ -230,7 +240,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         selected_color: (0, 0, 0),
         tile_idx: None,
         selected_tile: [[0; 8]; 8],
-        selection_source: SelectionSource::MainScreen,
+        selection_source: SelectionSource::MainArea,
         start_coords: None,
         end_coords: None,
         selected_tile_block: TileBlock::default(),
@@ -248,7 +258,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         }
     }
     ensure_themes_non_empty(&mut state);
-    ensure_screens_non_empty(&mut state);
+    ensure_areas_non_empty(&mut state);
     ensure_palettes_non_empty(&mut state);
     Ok(state)
 }

@@ -92,7 +92,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                             state.action = InternalStateAction::Selecting;
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::StartScreenSelection(
+                                Some(Message::StartTileSelection(
                                     clamped_position_in(
                                         p,
                                         bounds,
@@ -123,7 +123,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                         };
                         return (
                             canvas::event::Status::Captured,
-                            Some(Message::EndScreenSelection(coords)),
+                            Some(Message::EndTileSelection(coords)),
                         );
                     }
                 }
@@ -132,7 +132,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::ProgressScreenSelection(clamped_position_in(
+                                Some(Message::ProgressTileSelection(clamped_position_in(
                                     p,
                                     bounds,
                                     self.palette.tiles.len() / 16,
@@ -206,7 +206,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
         }
 
         // if self.brush_mode {
-        //     // Overlay the block to be pasted/brushed onto the screen:
+        //     // Overlay the block to be pasted/brushed onto the area:
         //     if let Some(Point { x: base_x, y: base_y }) = state.coords {
         //         let base_addr =
         //             (base_y * 8 + 1) as usize * row_stride + (base_x * 8 + 1) as usize * col_stride;

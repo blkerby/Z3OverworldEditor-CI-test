@@ -1,4 +1,4 @@
-// Module for displaying/editing a screen
+// Module for displaying/editing an area
 use hashbrown::HashMap;
 use iced::{
     alignment::Vertical,
@@ -15,7 +15,7 @@ use log::info;
 
 use crate::{
     message::{Message, SelectionSource},
-    state::{scale_color, EditorState, Palette, PaletteId, Screen, TileBlock, TileCoord},
+    state::{scale_color, Area, EditorState, Palette, PaletteId, TileBlock, TileCoord},
 };
 
 use super::modal_background_style;
@@ -24,8 +24,8 @@ use super::modal_background_style;
 // This is to work around a limitation in Iced's rendering pipeline that does not allow drawing
 // primitives (e.g. rectangles) on top of images within a single canvas.
 
-struct ScreenGrid<'a> {
-    screen: &'a Screen,
+struct AreaGrid<'a> {
+    area: &'a Area,
     palettes: &'a [Palette],
     palettes_id_idx_map: &'a HashMap<PaletteId, usize>,
     end_coords: Option<(TileCoord, TileCoord)>,
@@ -63,7 +63,7 @@ fn clamped_position_in(
     }
 }
 
-impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
+impl<'a> canvas::Program<Message> for AreaGrid<'a> {
     type State = InternalState;
 
     fn update(
@@ -77,7 +77,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
             state.coords = Some(clamped_position_in(
                 p,
                 bounds,
-                self.screen.size,
+                self.area.size,
                 self.pixel_size,
             ));
         }
@@ -89,10 +89,10 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                             state.action = InternalStateAction::Brushing;
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::ScreenBrush(clamped_position_in(
+                                Some(Message::AreaBrush(clamped_position_in(
                                     p,
                                     bounds,
-                                    self.screen.size,
+                                    self.area.size,
                                     self.pixel_size,
                                 ))),
                             );
@@ -100,14 +100,9 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                             state.action = InternalStateAction::Selecting;
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::StartScreenSelection(
-                                    clamped_position_in(
-                                        p,
-                                        bounds,
-                                        self.screen.size,
-                                        self.pixel_size,
-                                    ),
-                                    crate::message::SelectionSource::MainScreen,
+                                Some(Message::StartTileSelection(
+                                    clamped_position_in(p, bounds, self.area.size, self.pixel_size),
+                                    crate::message::SelectionSource::MainArea,
                                 )),
                             );
                         }
@@ -118,7 +113,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                     state.action = InternalStateAction::None;
                     if !self.brush_mode && state0.action == InternalStateAction::Selecting {
                         let coords = if let Some(p) = cursor.position() {
-                            clamped_position_in(p, bounds, self.screen.size, self.pixel_size)
+                            clamped_position_in(p, bounds, self.area.size, self.pixel_size)
                         } else if let Some(c) = self.end_coords {
                             Point::new(c.0, c.1)
                         } else {
@@ -126,7 +121,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                         };
                         return (
                             canvas::event::Status::Captured,
-                            Some(Message::EndScreenSelection(coords)),
+                            Some(Message::EndTileSelection(coords)),
                         );
                     }
                 }
@@ -135,10 +130,10 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::ProgressScreenSelection(clamped_position_in(
+                                Some(Message::ProgressTileSelection(clamped_position_in(
                                     p,
                                     bounds,
-                                    self.screen.size,
+                                    self.area.size,
                                     self.pixel_size,
                                 ))),
                             );
@@ -147,10 +142,10 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::ScreenBrush(clamped_position_in(
+                                Some(Message::AreaBrush(clamped_position_in(
                                     p,
                                     bounds,
-                                    self.screen.size,
+                                    self.area.size,
                                     self.pixel_size,
                                 ))),
                             );
@@ -187,30 +182,29 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
 
         // Add a pixel of transparent padding around the image, since Iced's
         // "nearest neighbor" filter results in the edge pixels having the wrong size.
-        let num_cols = self.screen.size.1 as usize * 256 + 2;
-        let num_rows = self.screen.size.0 as usize * 256 + 2;
+        let num_cols = self.area.size.1 as usize * 256 + 2;
+        let num_rows = self.area.size.0 as usize * 256 + 2;
         let mut data: Vec<u8> = vec![0; num_rows * num_cols * 4];
         let row_stride = num_cols * 4;
         let col_stride = 4;
-        for sy in 0..self.screen.size.1 as usize {
-            for sx in 0..self.screen.size.0 as usize {
-                let subscreen = &self.screen.subscreens[sy * self.screen.size.0 as usize + sx];
-                let subscreen_addr = (sy * 256 + 1) * row_stride + (sx * 256 + 1) * 4;
+        for sy in 0..self.area.size.1 as usize {
+            for sx in 0..self.area.size.0 as usize {
+                let screen = &self.area.screens[sy * self.area.size.0 as usize + sx];
+                let screen_addr = (sy * 256 + 1) * row_stride + (sx * 256 + 1) * 4;
                 for ty in 0..32 {
                     for tx in 0..32 {
-                        let palette_id = subscreen.palettes[ty][tx];
+                        let palette_id = screen.palettes[ty][tx];
                         let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) else {
                             // TODO: draw some indicator of the broken tile (due to invalid palette reference)
                             continue;
                         };
-                        let tile_idx = subscreen.tiles[ty][tx];
+                        let tile_idx = screen.tiles[ty][tx];
                         if tile_idx as usize >= self.palettes[palette_idx].tiles.len() {
                             continue;
                         }
                         let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
                         let cb = &color_bytes[palette_idx];
-                        let mut tile_addr =
-                            subscreen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
+                        let mut tile_addr = screen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
                         for py in 0..8 {
                             let mut addr = tile_addr;
                             for px in 0..8 {
@@ -226,7 +220,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
         }
 
         if self.brush_mode {
-            // Overlay the block to be pasted/brushed onto the screen:
+            // Overlay the block to be pasted/brushed onto the area:
             if let Some(Point {
                 x: base_x,
                 y: base_y,
@@ -306,7 +300,7 @@ impl<'a> canvas::Program<Message> for ScreenGrid<'a> {
     }
 }
 
-struct ScreenSelect {
+struct AreaSelect {
     top: TileCoord,
     bottom: TileCoord,
     left: TileCoord,
@@ -316,7 +310,7 @@ struct ScreenSelect {
     brush_mode: bool,
 }
 
-impl canvas::Program<Message> for ScreenSelect {
+impl canvas::Program<Message> for AreaSelect {
     // No internal state
     type State = ();
 
@@ -382,9 +376,9 @@ impl canvas::Program<Message> for ScreenSelect {
     }
 }
 
-pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
-    let num_cols = state.screen.size.1 * 32;
-    let num_rows = state.screen.size.0 * 32;
+pub fn area_grid_view(state: &EditorState) -> Element<Message> {
+    let num_cols = state.area.size.1 * 32;
+    let num_rows = state.area.size.0 * 32;
     let pixel_size = state.global_config.pixel_size;
 
     let mut left = 0;
@@ -404,8 +398,8 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
 
     Scrollable::with_direction(
         column![stack![
-            canvas(ScreenGrid {
-                screen: &state.screen,
+            canvas(AreaGrid {
+                area: &state.area,
                 palettes: &state.palettes,
                 palettes_id_idx_map: &state.palettes_id_idx_map,
                 pixel_size,
@@ -416,8 +410,8 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
             })
             .width((num_cols as f32 * 8.0 + 2.0) * pixel_size)
             .height((num_rows as f32 * 8.0 + 2.0) * pixel_size),
-            canvas(ScreenSelect {
-                active: state.selection_source == SelectionSource::MainScreen
+            canvas(AreaSelect {
+                active: state.selection_source == SelectionSource::MainArea
                     && state.start_coords.is_some()
                     && state.end_coords.is_some()
                     && !state.brush_mode,
@@ -442,24 +436,24 @@ pub fn screen_grid_view(state: &EditorState) -> Element<Message> {
     .into()
 }
 
-pub fn screen_controls(state: &EditorState) -> Element<Message> {
+pub fn area_controls(state: &EditorState) -> Element<Message> {
     row![
-        text("Screen"),
+        text("Area"),
         pick_list(
-            state.screen_names.clone(),
-            Some(state.screen.name.clone()),
-            Message::SelectScreen
+            state.area_names.clone(),
+            Some(state.area.name.clone()),
+            Message::SelectArea
         )
         .width(200),
         button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
             .style(button::success)
-            .on_press(Message::AddScreenDialogue),
+            .on_press(Message::AddAreaDialogue),
         button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
-            .on_press(Message::RenameScreenDialogue),
+            .on_press(Message::RenameAreaDialogue),
         text("Theme"),
         pick_list(
             state.theme_names.clone(),
-            Some(state.screen.theme.clone()),
+            Some(state.area.theme.clone()),
             Message::SelectTheme
         )
         .width(200),
@@ -475,34 +469,34 @@ pub fn screen_controls(state: &EditorState) -> Element<Message> {
     .into()
 }
 
-pub fn add_screen_view(name: &String, size: (u8, u8)) -> Element<Message> {
+pub fn add_area_view(name: &String, size: (u8, u8)) -> Element<Message> {
     container(
         column![
-            text("Add a new screen."),
+            text("Add a new area."),
             row![
                 text("Name: ").width(70),
                 text_input("", name)
-                    .id("AddScreen")
-                    .on_input(Message::SetAddScreenName)
-                    .on_submit(Message::AddScreen)
+                    .id("AddArea")
+                    .on_input(Message::SetAddAreaName)
+                    .on_submit(Message::AddArea)
             ]
             .spacing(10)
             .align_y(Vertical::Center),
             row![
                 text("Size: ").width(70),
-                number_input(&size.0, 1..=8, Message::SetAddScreenSizeX)
+                number_input(&size.0, 1..=8, Message::SetAddAreaSizeX)
                     .width(50)
-                    .on_submit(Message::AddScreen),
+                    .on_submit(Message::AddArea),
                 text(" by "),
-                number_input(&size.1, 1..=8, Message::SetAddScreenSizeY)
+                number_input(&size.1, 1..=8, Message::SetAddAreaSizeY)
                     .width(50)
-                    .on_submit(Message::AddScreen),
+                    .on_submit(Message::AddArea),
             ]
             .spacing(10)
             .align_y(Vertical::Center),
-            button(text("Add screen"))
+            button(text("Add area"))
                 .style(button::success)
-                .on_press(Message::AddScreen),
+                .on_press(Message::AddArea),
         ]
         .spacing(10),
     )
@@ -512,26 +506,26 @@ pub fn add_screen_view(name: &String, size: (u8, u8)) -> Element<Message> {
     .into()
 }
 
-pub fn rename_screen_view(state: &EditorState, name: &String) -> Element<'static, Message> {
-    let old_name = state.screen.name.clone();
+pub fn rename_area_view(state: &EditorState, name: &String) -> Element<'static, Message> {
+    let old_name = state.area.name.clone();
     container(
         column![
-            text(format!("Rename screen \"{}\"", old_name)),
+            text(format!("Rename area \"{}\"", old_name)),
             row![
                 text("Name: ").width(70),
                 text_input("", name)
-                    .id("RenameScreen")
-                    .on_input(Message::SetRenameScreenName)
-                    .on_submit(Message::RenameScreen)
+                    .id("RenameArea")
+                    .on_input(Message::SetRenameAreaName)
+                    .on_submit(Message::RenameArea)
             ]
             .spacing(10)
             .align_y(Vertical::Center),
             row![
-                button(text("Rename screen")).on_press(Message::RenameScreen),
+                button(text("Rename area")).on_press(Message::RenameArea),
                 Space::with_width(Length::Fill),
-                button(text("Delete screen"))
+                button(text("Delete area"))
                     .style(button::danger)
-                    .on_press(Message::DeleteScreenDialogue),
+                    .on_press(Message::DeleteAreaDialogue),
             ],
         ]
         .spacing(10),
@@ -542,15 +536,15 @@ pub fn rename_screen_view(state: &EditorState, name: &String) -> Element<'static
     .into()
 }
 
-pub fn delete_screen_view(state: &EditorState) -> Element<Message> {
-    let name = state.screen.name.clone();
+pub fn delete_area_view(state: &EditorState) -> Element<Message> {
+    let name = state.area.name.clone();
     container(
         column![
-            text(format!("Delete screen \"{}\"?", name)),
-            text("This will delete the screen across all themes."),
-            button(text("Delete screen"))
+            text(format!("Delete area \"{}\"?", name)),
+            text("This will delete the area across all themes."),
+            button(text("Delete area"))
                 .style(button::danger)
-                .on_press(Message::DeleteScreen),
+                .on_press(Message::DeleteArea),
         ]
         .spacing(10),
     )
@@ -586,7 +580,7 @@ pub fn add_theme_view(name: &String) -> Element<Message> {
 }
 
 pub fn rename_theme_view(state: &EditorState, name: &String) -> Element<'static, Message> {
-    let old_name = state.screen.theme.clone();
+    let old_name = state.area.theme.clone();
     container(
         column![
             text(format!("Rename theme \"{}\"", old_name)),
@@ -616,11 +610,11 @@ pub fn rename_theme_view(state: &EditorState, name: &String) -> Element<'static,
 }
 
 pub fn delete_theme_view(state: &EditorState) -> Element<Message> {
-    let theme = state.screen.theme.clone();
+    let theme = state.area.theme.clone();
     container(
         column![
             text(format!("Delete theme \"{}\"?", theme)),
-            text("This will delete the theme across all screens."),
+            text("This will delete the theme across all areas."),
             button(text("Delete theme"))
                 .style(button::danger)
                 .on_press(Message::DeleteTheme),

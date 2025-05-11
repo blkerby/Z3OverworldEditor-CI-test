@@ -149,10 +149,15 @@ pub struct Rom {
     pub data: Vec<u8>,
 }
 
+// struct Tile16 {
+//     top_left:
+// }
+
 pub struct Importer<'a> {
     state: &'a mut EditorState,
     constants: Constants,
     rom: Rom,
+    // tiles16: Vec<Tile16>,
 }
 
 impl Rom {

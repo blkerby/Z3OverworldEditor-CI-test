@@ -66,7 +66,7 @@ pub fn import_rom_view(state: &EditorState) -> Element<Message> {
     container(
         column![
             text("Import project from ROM?"),
-            text("This may replace existing project data, including palettes, tilesets, and screens."),
+            text("This may replace existing project data, including palettes, tilesets, and areas."),
             row![
                 button(text("Import from ROM"))
                 .style(button::danger)

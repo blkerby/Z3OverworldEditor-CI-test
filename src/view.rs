@@ -1,11 +1,15 @@
+mod area;
 mod graphics;
 mod palette;
-mod screen;
 mod settings;
 mod tiles;
 
 use std::path::PathBuf;
 
+use area::{
+    add_area_view, add_theme_view, area_controls, area_grid_view, delete_area_view,
+    delete_theme_view, rename_area_view, rename_theme_view,
+};
 use graphics::graphics_view;
 use iced::{
     widget::{button, center, column, container, mouse_area, opaque, row, stack, text, Space},
@@ -13,10 +17,6 @@ use iced::{
 };
 use iced_aw::quad;
 use palette::{add_palette_view, delete_palette_view, palette_view, rename_palette_view};
-use screen::{
-    add_screen_view, add_theme_view, delete_screen_view, delete_theme_view, rename_screen_view,
-    rename_theme_view, screen_controls, screen_grid_view,
-};
 use settings::{import_rom_view, settings_view};
 use tiles::tile_view;
 
@@ -106,10 +106,10 @@ pub fn view(state: &EditorState) -> Element<Message> {
                 button(text("\u{F3E2}").font(iced_fonts::BOOTSTRAP_FONT))
                     .style(button::secondary)
                     .on_press(Message::SettingsDialogue),
-                screen_controls(state),
+                area_controls(state),
             ]
             .spacing(10),
-            screen_grid_view(state),
+            area_grid_view(state),
         ]
         .padding(10)
         .spacing(10),
@@ -139,18 +139,14 @@ pub fn view(state: &EditorState) -> Element<Message> {
                     Message::HideModal,
                 );
             }
-            Dialogue::AddScreen { name, size } => {
-                main_view = modal(main_view, add_screen_view(name, *size), Message::HideModal);
+            Dialogue::AddArea { name, size } => {
+                main_view = modal(main_view, add_area_view(name, *size), Message::HideModal);
             }
-            Dialogue::RenameScreen { name } => {
-                main_view = modal(
-                    main_view,
-                    rename_screen_view(state, name),
-                    Message::HideModal,
-                );
+            Dialogue::RenameArea { name } => {
+                main_view = modal(main_view, rename_area_view(state, name), Message::HideModal);
             }
-            Dialogue::DeleteScreen => {
-                main_view = modal(main_view, delete_screen_view(state), Message::HideModal);
+            Dialogue::DeleteArea => {
+                main_view = modal(main_view, delete_area_view(state), Message::HideModal);
             }
             Dialogue::AddTheme { name } => {
                 main_view = modal(main_view, add_theme_view(name), Message::HideModal);

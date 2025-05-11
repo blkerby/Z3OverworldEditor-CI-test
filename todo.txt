@@ -1,8 +1,8 @@
 Some features still needed:
-- Import from ROM: palettes, tiles, and screens
-- Swap tiles (within and between palettes), updating screen data
+- Import from ROM: palettes, tiles, and areas
+- Swap tiles (within and between palettes), updating area data
 - Undo
-- Way to open a second screen/scratch in side panel (instead of palette/tileset editor)
+- Way to open a second area/scratch in side panel (instead of palette/tileset editor)
 - Collision data
 - World editor
 - Export to ROM

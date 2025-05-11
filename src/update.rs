@@ -6,13 +6,17 @@ use itertools::Itertools;
 use log::{error, info, warn};
 
 use crate::{
-    import::Importer, message::{Message, SelectionSource}, persist::{
-        self, copy_screen_theme, delete_palette, delete_screen, delete_screen_theme, load_project,
-        load_screen, load_screen_list, rename_screen, rename_screen_theme, save_screen,
-    }, state::{
-        Dialogue, EditorState, PaletteId, Screen, Subscreen, Tile, TileBlock, TileCoord, TileIdx,
+    import::Importer,
+    message::{Message, SelectionSource},
+    persist::{
+        self, copy_area_theme, delete_area, delete_area_theme, delete_palette, load_area,
+        load_area_list, load_project, rename_area, rename_area_theme, save_area,
+    },
+    state::{
+        Area, Dialogue, EditorState, PaletteId, Screen, Tile, TileBlock, TileCoord, TileIdx,
         MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
-    }, view::{open_project, open_rom}
+    },
+    view::{open_project, open_rom},
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
@@ -303,7 +307,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                         return Task::none();
                     }
                     update_palette_order(state);
-                    // TODO: update currently loaded screen, since palette indices may have shifted
+                    // TODO: update currently loaded area, since palette indices may have shifted
                     state.dialogue = None;
                 }
                 _ => {}
@@ -431,157 +435,157 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 }
             }
         }
-        Message::SelectScreen(name) => {
-            if let Err(e) = load_screen(state, &name, &state.screen.theme.clone()) {
+        Message::SelectArea(name) => {
+            if let Err(e) = load_area(state, &name, &state.area.theme.clone()) {
                 error!(
-                    "Error loading screen {} (theme {}): {}\n{}",
+                    "Error loading area {} (theme {}): {}\n{}",
                     name,
-                    state.screen.theme,
+                    state.area.theme,
                     e,
                     e.backtrace()
                 );
             }
         }
-        Message::AddScreenDialogue => {
-            state.dialogue = Some(Dialogue::AddScreen {
+        Message::AddAreaDialogue => {
+            state.dialogue = Some(Dialogue::AddArea {
                 name: "".to_string(),
                 size: (2, 2),
             });
-            return iced::widget::text_input::focus("AddScreen");
+            return iced::widget::text_input::focus("AddArea");
         }
-        Message::SetAddScreenName(new_name) => match &mut state.dialogue {
-            Some(Dialogue::AddScreen { name, .. }) => {
+        Message::SetAddAreaName(new_name) => match &mut state.dialogue {
+            Some(Dialogue::AddArea { name, .. }) => {
                 *name = new_name;
             }
             _ => {}
         },
-        Message::SetAddScreenSizeX(new_x) => match &mut state.dialogue {
-            Some(Dialogue::AddScreen { size, .. }) => {
+        Message::SetAddAreaSizeX(new_x) => match &mut state.dialogue {
+            Some(Dialogue::AddArea { size, .. }) => {
                 size.0 = new_x;
             }
             _ => {}
         },
-        Message::SetAddScreenSizeY(new_y) => match &mut state.dialogue {
-            Some(Dialogue::AddScreen { size, .. }) => {
+        Message::SetAddAreaSizeY(new_y) => match &mut state.dialogue {
+            Some(Dialogue::AddArea { size, .. }) => {
                 size.1 = new_y;
             }
             _ => {}
         },
-        Message::AddScreen => {
+        Message::AddArea => {
             match &state.dialogue {
-                Some(Dialogue::AddScreen { name, size }) => {
+                Some(Dialogue::AddArea { name, size }) => {
                     if name.len() == 0 {
-                        warn!("Empty screen name is invalid.");
+                        warn!("Empty area name is invalid.");
                         return Task::none();
                     }
                     let name = name.clone();
                     let size = size.clone();
-                    for s in &state.screen_names {
+                    for s in &state.area_names {
                         if s == &name {
-                            // Don't add a non-unique screen name.
-                            warn!("Screen name {} already exists.", name);
+                            // Don't add a non-unique area name.
+                            warn!("Area name {} already exists.", name);
                             return Task::none();
                         }
                     }
                     for theme in state.theme_names.clone() {
-                        state.screen = Screen {
+                        state.area = Area {
                             modified: true,
                             name: name.clone(),
                             theme,
                             size,
-                            subscreens: (0..size.0)
+                            screens: (0..size.0)
                                 .cartesian_product(0..size.1)
-                                .map(|(x, y)| Subscreen {
+                                .map(|(x, y)| Screen {
                                     position: (x, y),
                                     palettes: [[0; 32]; 32],
                                     tiles: [[0; 32]; 32],
                                 })
                                 .collect(),
                         };
-                        if let Err(e) = save_screen(state) {
-                            error!("Error saving new screen: {}\n{}", e, e.backtrace());
+                        if let Err(e) = save_area(state) {
+                            error!("Error saving new area: {}\n{}", e, e.backtrace());
                         }
                     }
                     state.dialogue = None;
-                    state.screen_names.push(name.clone());
-                    state.screen_names.sort();
+                    state.area_names.push(name.clone());
+                    state.area_names.sort();
                 }
                 _ => {}
             }
         }
-        Message::RenameScreenDialogue => {
-            state.dialogue = Some(Dialogue::RenameScreen {
-                name: state.screen.name.clone(),
+        Message::RenameAreaDialogue => {
+            state.dialogue = Some(Dialogue::RenameArea {
+                name: state.area.name.clone(),
             });
-            return iced::widget::text_input::focus("RenameScreen");
+            return iced::widget::text_input::focus("RenameArea");
         }
-        Message::SetRenameScreenName(new_name) => match &mut state.dialogue {
-            Some(Dialogue::RenameScreen { name }) => {
+        Message::SetRenameAreaName(new_name) => match &mut state.dialogue {
+            Some(Dialogue::RenameArea { name }) => {
                 *name = new_name;
             }
             _ => {}
         },
-        Message::RenameScreen => {
+        Message::RenameArea => {
             match &state.dialogue {
-                Some(Dialogue::RenameScreen { name }) => {
+                Some(Dialogue::RenameArea { name }) => {
                     if name.len() == 0 {
-                        warn!("Empty screen name is invalid.");
+                        warn!("Empty area name is invalid.");
                         return Task::none();
                     }
                     let name = name.clone();
-                    for s in &state.screen_names {
-                        if s == &name && s != &state.screen.name {
-                            // Don't add a non-unique screen name.
-                            warn!("Screen name {} already exists.", name);
+                    for s in &state.area_names {
+                        if s == &name && s != &state.area.name {
+                            // Don't add a non-unique area name.
+                            warn!("Area name {} already exists.", name);
                             return Task::none();
                         }
                     }
-                    if let Err(e) = rename_screen(state, &name) {
-                        error!("Error renaming screen: {}\n{}", e, e.backtrace());
+                    if let Err(e) = rename_area(state, &name) {
+                        error!("Error renaming area: {}\n{}", e, e.backtrace());
                         return Task::none();
                     }
-                    if let Err(e) = load_screen_list(state) {
-                        error!("Error reloading screen listing: {}\n{}", e, e.backtrace());
+                    if let Err(e) = load_area_list(state) {
+                        error!("Error reloading area listing: {}\n{}", e, e.backtrace());
                         return Task::none();
                     }
-                    state.screen.name = name.clone();
+                    state.area.name = name.clone();
                     state.dialogue = None;
                 }
                 _ => {}
             }
         }
-        Message::DeleteScreenDialogue => {
-            state.dialogue = Some(Dialogue::DeleteScreen);
+        Message::DeleteAreaDialogue => {
+            state.dialogue = Some(Dialogue::DeleteArea);
         }
-        Message::DeleteScreen => {
-            if state.screen_names.len() == 1 {
-                warn!("Not allowed to delete the last remaining screen.");
+        Message::DeleteArea => {
+            if state.area_names.len() == 1 {
+                warn!("Not allowed to delete the last remaining area.");
                 return Task::none();
             }
-            if let Err(e) = delete_screen(state, &state.screen.name.clone()) {
-                error!("Error deleting screen: {}\n{}", e, e.backtrace());
+            if let Err(e) = delete_area(state, &state.area.name.clone()) {
+                error!("Error deleting area: {}\n{}", e, e.backtrace());
                 return Task::none();
             }
-            if let Err(e) = load_screen_list(state) {
-                error!("Error reloading screen listing: {}\n{}", e, e.backtrace());
+            if let Err(e) = load_area_list(state) {
+                error!("Error reloading area listing: {}\n{}", e, e.backtrace());
                 return Task::none();
             }
-            if let Err(e) = load_screen(
+            if let Err(e) = load_area(
                 state,
-                &state.screen_names[0].clone(),
-                &state.screen.theme.clone(),
+                &state.area_names[0].clone(),
+                &state.area.theme.clone(),
             ) {
-                error!("Error loading screen: {}\n{}", e, e.backtrace());
+                error!("Error loading area: {}\n{}", e, e.backtrace());
                 return Task::none();
             }
             state.dialogue = None;
         }
         Message::SelectTheme(theme) => {
-            if let Err(err) = load_screen(state, &state.screen.name.clone(), &theme) {
+            if let Err(err) = load_area(state, &state.area.name.clone(), &theme) {
                 error!(
-                    "Error loading theme {} (screen {}): {}\n{}",
+                    "Error loading theme {} (area {}): {}\n{}",
                     theme,
-                    state.screen.name,
+                    state.area.name,
                     err,
                     err.backtrace()
                 );
@@ -614,14 +618,14 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                             return Task::none();
                         }
                     }
-                    let old_theme = state.screen.theme.clone();
-                    for screen_name in &state.screen_names.clone() {
-                        if let Err(e) = copy_screen_theme(state, screen_name, &old_theme, &theme) {
-                            error!("Error copying screen: {}\n{}", e, e.backtrace());
+                    let old_theme = state.area.theme.clone();
+                    for area_name in &state.area_names.clone() {
+                        if let Err(e) = copy_area_theme(state, area_name, &old_theme, &theme) {
+                            error!("Error copying area: {}\n{}", e, e.backtrace());
                             return Task::none();
                         }
                     }
-                    state.screen.theme = theme.clone();
+                    state.area.theme = theme.clone();
                     state.theme_names.push(theme.clone());
                     state.theme_names.sort();
                     state.dialogue = None;
@@ -631,7 +635,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::RenameThemeDialogue => {
             state.dialogue = Some(Dialogue::RenameTheme {
-                name: state.screen.theme.clone(),
+                name: state.area.theme.clone(),
             });
             return iced::widget::text_input::focus("RenameTheme");
         }
@@ -656,19 +660,18 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                             return Task::none();
                         }
                     }
-                    let old_theme = state.screen.theme.clone();
-                    for screen_name in &state.screen_names.clone() {
-                        if let Err(e) = rename_screen_theme(state, screen_name, &old_theme, &theme)
-                        {
-                            error!("Error renaming screen: {}\n{}", e, e.backtrace());
+                    let old_theme = state.area.theme.clone();
+                    for area_name in &state.area_names.clone() {
+                        if let Err(e) = rename_area_theme(state, area_name, &old_theme, &theme) {
+                            error!("Error renaming area: {}\n{}", e, e.backtrace());
                             return Task::none();
                         }
                     }
-                    if let Err(e) = load_screen_list(state) {
-                        error!("Error reloading screen listing: {}\n{}", e, e.backtrace());
+                    if let Err(e) = load_area_list(state) {
+                        error!("Error reloading area listing: {}\n{}", e, e.backtrace());
                         return Task::none();
                     }
-                    state.screen.theme = theme;
+                    state.area.theme = theme;
                     state.dialogue = None;
                 }
                 _ => {}
@@ -682,36 +685,36 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 warn!("Not allowed to delete the last remaining theme.");
                 return Task::none();
             }
-            let theme = state.screen.theme.clone();
-            for screen_name in &state.screen_names.clone() {
-                if let Err(e) = delete_screen_theme(state, screen_name, &theme) {
-                    error!("Error deleting screen: {}\n{}", e, e.backtrace());
+            let theme = state.area.theme.clone();
+            for area_name in &state.area_names.clone() {
+                if let Err(e) = delete_area_theme(state, area_name, &theme) {
+                    error!("Error deleting area: {}\n{}", e, e.backtrace());
                     return Task::none();
                 }
             }
-            if let Err(e) = load_screen_list(state) {
-                error!("Error reloading screen listing: {}\n{}", e, e.backtrace());
+            if let Err(e) = load_area_list(state) {
+                error!("Error reloading area listing: {}\n{}", e, e.backtrace());
                 return Task::none();
             }
-            if let Err(e) = load_screen(
+            if let Err(e) = load_area(
                 state,
-                &state.screen.name.clone(),
+                &state.area.name.clone(),
                 &state.theme_names[0].clone(),
             ) {
-                error!("Error loading screen: {}\n{}", e, e.backtrace());
+                error!("Error loading area: {}\n{}", e, e.backtrace());
                 return Task::none();
             }
             state.dialogue = None;
         }
-        Message::StartScreenSelection(p, source) => {
+        Message::StartTileSelection(p, source) => {
             state.selection_source = source;
             state.start_coords = Some((p.x, p.y));
             state.end_coords = Some((p.x, p.y));
         }
-        Message::ProgressScreenSelection(p) => {
+        Message::ProgressTileSelection(p) => {
             state.end_coords = Some((p.x, p.y));
         }
-        Message::EndScreenSelection(p1) => {
+        Message::EndTileSelection(p1) => {
             let p1 = (p1.x, p1.y);
             let Some(p0) = state.start_coords else {
                 return Task::none();
@@ -723,7 +726,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             let bottom = p0.1.max(p1.1);
 
             match state.selection_source {
-                SelectionSource::MainScreen => {}
+                SelectionSource::MainArea => {}
                 SelectionSource::Tileset => {
                     if left == right && top == bottom {
                         let idx = p1.1 * 16 + p1.0;
@@ -740,9 +743,9 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 let mut tile_row: Vec<TileIdx> = vec![];
                 for x in left..=right {
                     match state.selection_source {
-                        SelectionSource::MainScreen => {
-                            pal_row.push(state.screen.get_palette(x, y));
-                            tile_row.push(state.screen.get_tile(x, y));
+                        SelectionSource::MainArea => {
+                            pal_row.push(state.area.get_palette(x, y));
+                            tile_row.push(state.area.get_tile(x, y));
                         }
                         SelectionSource::Tileset => {
                             pal_row.push(state.palettes[state.palette_idx].id);
@@ -772,19 +775,19 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 state.selected_gfx.push(gfx_row);
             }
         }
-        Message::ScreenBrush(p) => {
+        Message::AreaBrush(p) => {
             let s = &state.selected_tile_block;
             for y in 0..s.size.1 {
                 for x in 0..s.size.0 {
                     state
-                        .screen
+                        .area
                         .set_palette(p.x + x, p.y + y, s.palettes[y as usize][x as usize]);
                     state
-                        .screen
+                        .area
                         .set_tile(p.x + x, p.y + y, s.tiles[y as usize][x as usize]);
                 }
             }
-            state.screen.modified = true;
+            state.area.modified = true;
         }
     }
     Task::none()
