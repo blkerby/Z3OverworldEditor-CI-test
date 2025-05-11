@@ -61,3 +61,26 @@ pub fn settings_view(state: &EditorState) -> Element<Message> {
     .style(modal_background_style)
     .into()
 }
+
+pub fn import_rom_view(state: &EditorState) -> Element<Message> {
+    container(
+        column![
+            text("Import project from ROM?"),
+            text("This may replace existing project data, including palettes, tilesets, and screens."),
+            row![
+                button(text("Import from ROM"))
+                .style(button::danger)
+                .on_press(Message::ImportROM),
+                horizontal_space(),
+                button(text("Cancel"))
+                .style(button::secondary)
+                .on_press(Message::CloseDialogue),
+            ]
+        ]
+        .spacing(15),
+    )
+    .width(450)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
+}

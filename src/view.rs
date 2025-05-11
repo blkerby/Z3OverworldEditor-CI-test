@@ -17,11 +17,12 @@ use screen::{
     add_screen_view, add_theme_view, delete_screen_view, delete_theme_view, rename_screen_view,
     rename_theme_view, screen_controls, screen_grid_view,
 };
-use settings::settings_view;
+use settings::{import_rom_view, settings_view};
 use tiles::tile_view;
 
 use crate::{
-    import::import_rom_view, message::Message, state::{Dialogue, EditorState}
+    message::Message,
+    state::{Dialogue, EditorState},
 };
 
 pub async fn open_project() -> Option<PathBuf> {

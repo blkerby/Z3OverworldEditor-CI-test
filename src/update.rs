@@ -6,17 +6,13 @@ use itertools::Itertools;
 use log::{error, info, warn};
 
 use crate::{
-    import::import_from_rom,
-    message::{Message, SelectionSource},
-    persist::{
+    import::Importer, message::{Message, SelectionSource}, persist::{
         self, copy_screen_theme, delete_palette, delete_screen, delete_screen_theme, load_project,
         load_screen, load_screen_list, rename_screen, rename_screen_theme, save_screen,
-    },
-    state::{
+    }, state::{
         Dialogue, EditorState, PaletteId, Screen, Subscreen, Tile, TileBlock, TileCoord, TileIdx,
         MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
-    },
-    view::{open_project, open_rom},
+    }, view::{open_project, open_rom}
 };
 
 pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
@@ -197,7 +193,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         }
         Message::ImportROM => {
             if let Some(path) = &state.rom_path {
-                if let Err(e) = import_from_rom(state, &path.clone()) {
+                if let Err(e) = Importer::import(state, &path.clone()) {
                     error!("Error importing from ROM: {}\n{}", e, e.backtrace());
                     return Task::none();
                 }
