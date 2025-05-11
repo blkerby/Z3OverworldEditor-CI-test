@@ -13,7 +13,7 @@ use crate::{
         load_area_list, load_project, rename_area, rename_area_theme, save_area,
     },
     state::{
-        Area, Dialogue, EditorState, PaletteId, Screen, Tile, TileBlock, TileCoord, TileIdx,
+        Area, Dialogue, EditorState, Flip, PaletteId, Screen, Tile, TileBlock, TileCoord, TileIdx,
         MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
     },
     view::{open_project, open_rom},
@@ -117,6 +117,34 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 }
                 "s" => {
                     state.brush_mode = false;
+                }
+                "h" => {
+                    for i in 0..state.selected_tile_block.size.1 as usize {
+                        state.selected_tile_block.palettes[i].reverse();
+                        state.selected_tile_block.tiles[i].reverse();
+                        state.selected_tile_block.flips[i].reverse();
+                        state.selected_gfx[i].reverse();
+                        for j in 0..state.selected_tile_block.size.0 as usize {
+                            state.selected_tile_block.flips[i][j] =
+                                state.selected_tile_block.flips[i][j].flip_horizontally();
+                            state.selected_gfx[i][j] =
+                                Flip::Horizontal.apply(state.selected_gfx[i][j]);
+                        }
+                    }
+                }
+                "v" => {
+                    state.selected_tile_block.palettes.reverse();
+                    state.selected_tile_block.tiles.reverse();
+                    state.selected_tile_block.flips.reverse();
+                    state.selected_gfx.reverse();
+                    for i in 0..state.selected_tile_block.size.1 as usize {
+                        for j in 0..state.selected_tile_block.size.0 as usize {
+                            state.selected_tile_block.flips[i][j] =
+                                state.selected_tile_block.flips[i][j].flip_vertically();
+                            state.selected_gfx[i][j] =
+                                Flip::Vertical.apply(state.selected_gfx[i][j]);
+                        }
+                    }
                 }
                 "-" => {
                     state.global_config.pixel_size =
@@ -499,6 +527,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                                     position: (x, y),
                                     palettes: [[0; 32]; 32],
                                     tiles: [[0; 32]; 32],
+                                    flips: [[Flip::None; 32]; 32],
                                 })
                                 .collect(),
                         };
@@ -738,28 +767,34 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
 
             let mut palettes: Vec<Vec<PaletteId>> = vec![];
             let mut tiles: Vec<Vec<TileIdx>> = vec![];
+            let mut flips: Vec<Vec<Flip>> = vec![];
             for y in top..=bottom {
                 let mut pal_row: Vec<PaletteId> = vec![];
                 let mut tile_row: Vec<TileIdx> = vec![];
+                let mut flip_row: Vec<Flip> = vec![];
                 for x in left..=right {
                     match state.selection_source {
                         SelectionSource::MainArea => {
                             pal_row.push(state.area.get_palette(x, y));
                             tile_row.push(state.area.get_tile(x, y));
+                            flip_row.push(state.area.get_flip(x, y));
                         }
                         SelectionSource::Tileset => {
                             pal_row.push(state.palettes[state.palette_idx].id);
                             tile_row.push(y * 16 + x);
+                            flip_row.push(Flip::None)
                         }
                     }
                 }
                 palettes.push(pal_row);
                 tiles.push(tile_row);
+                flips.push(flip_row);
             }
             state.selected_tile_block = TileBlock {
                 size: (right - left + 1, bottom - top + 1),
                 palettes,
                 tiles,
+                flips,
             };
             let s = &state.selected_tile_block;
             state.selected_gfx.clear();
@@ -785,6 +820,9 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                     state
                         .area
                         .set_tile(p.x + x, p.y + y, s.tiles[y as usize][x as usize]);
+                    state
+                        .area
+                        .set_flip(p.x + x, p.y + y, s.flips[y as usize][x as usize]);
                 }
             }
             state.area.modified = true;

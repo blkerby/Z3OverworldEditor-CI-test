@@ -44,7 +44,7 @@ fn default_pixel_size() -> f32 {
     3.0
 }
 
-#[derive(Serialize_repr, Deserialize_repr, Default)]
+#[derive(Clone, Copy, Serialize_repr, Deserialize_repr, Default, Debug)]
 #[repr(u8)]
 pub enum Flip {
     #[default]
@@ -52,6 +52,47 @@ pub enum Flip {
     Horizontal = 1,
     Vertical = 2,
     Both = 3,
+}
+
+impl Flip {
+    pub fn flip_horizontally(self) -> Self {
+        match self {
+            Flip::None => Flip::Horizontal,
+            Flip::Horizontal => Flip::None,
+            Flip::Vertical => Flip::Both,
+            Flip::Both => Flip::Vertical,
+        }
+    }
+
+    pub fn flip_vertically(self) -> Self {
+        match self {
+            Flip::None => Flip::Vertical,
+            Flip::Horizontal => Flip::Both,
+            Flip::Vertical => Flip::None,
+            Flip::Both => Flip::Horizontal,
+        }
+    }
+
+    pub fn apply<T: Copy>(self, mut tile: [[T; 8]; 8]) -> [[T; 8]; 8] {
+        match self {
+            Flip::None => {}
+            Flip::Horizontal => {
+                for row in tile.iter_mut() {
+                    row.reverse();
+                }
+            }
+            Flip::Vertical => {
+                tile.reverse();
+            }
+            Flip::Both => {
+                for row in tile.iter_mut() {
+                    row.reverse();
+                }
+                tile.reverse();
+            }
+        }
+        tile
+    }
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -62,7 +103,7 @@ pub struct Screen {
     pub position: (u8, u8),
     pub palettes: [[PaletteId; 32]; 32],
     pub tiles: [[TileIdx; 32]; 32],
-    // pub flips: [[Flip; 32]; 32],
+    pub flips: [[Flip; 32]; 32],
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -81,37 +122,50 @@ pub struct Area {
 }
 
 impl Area {
-    pub fn get_screen(&self, x: TileCoord, y: TileCoord) -> usize {
+    pub fn get_screen_coords(&self, x: TileCoord, y: TileCoord) -> (usize, usize, usize) {
         let screen_x = (x / 32) as usize;
         let screen_y = (y / 32) as usize;
         let screen_i = screen_y * self.size.0 as usize + screen_x;
-        screen_i
-    }
-
-    pub fn get_tile(&self, x: TileCoord, y: TileCoord) -> TileIdx {
-        let screen_i = self.get_screen(x, y);
-        self.screens[screen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize]
+        (screen_i, (x % 32) as usize, (y % 32) as usize)
     }
 
     pub fn get_palette(&self, x: TileCoord, y: TileCoord) -> PaletteId {
-        let screen_i = self.get_screen(x, y);
-        self.screens[screen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize]
+        let (i, sx, sy) = self.get_screen_coords(x, y);
+        self.screens[i].palettes[sy][sx]
+    }
+
+    pub fn get_tile(&self, x: TileCoord, y: TileCoord) -> TileIdx {
+        let (i, sx, sy) = self.get_screen_coords(x, y);
+        self.screens[i].tiles[sy][sx]
+    }
+
+    pub fn get_flip(&self, x: TileCoord, y: TileCoord) -> Flip {
+        let (i, sx, sy) = self.get_screen_coords(x, y);
+        self.screens[i].flips[sy][sx]
     }
 
     pub fn set_tile(&mut self, x: TileCoord, y: TileCoord, tile_idx: TileIdx) {
         if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
             return;
         }
-        let screen_i = self.get_screen(x, y);
-        self.screens[screen_i as usize].tiles[(y % 32) as usize][(x % 32) as usize] = tile_idx;
+        let (i, sx, sy) = self.get_screen_coords(x, y);
+        self.screens[i].tiles[sy][sx] = tile_idx;
     }
 
     pub fn set_palette(&mut self, x: TileCoord, y: TileCoord, palette_id: PaletteId) {
         if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
             return;
         }
-        let screen_i = self.get_screen(x, y);
-        self.screens[screen_i as usize].palettes[(y % 32) as usize][(x % 32) as usize] = palette_id;
+        let (i, sx, sy) = self.get_screen_coords(x, y);
+        self.screens[i].palettes[sy][sx] = palette_id;
+    }
+
+    pub fn set_flip(&mut self, x: TileCoord, y: TileCoord, flip: Flip) {
+        if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
+            return;
+        }
+        let (i, sx, sy) = self.get_screen_coords(x, y);
+        self.screens[i].flips[sy][sx] = flip;
     }
 }
 
@@ -134,6 +188,7 @@ pub struct TileBlock {
     pub size: (TileCoord, TileCoord),
     pub palettes: Vec<Vec<PaletteId>>,
     pub tiles: Vec<Vec<TileIdx>>,
+    pub flips: Vec<Vec<Flip>>,
 }
 
 pub struct EditorState {
@@ -204,6 +259,7 @@ pub fn ensure_areas_non_empty(state: &mut EditorState) {
                     position: (x, y),
                     palettes: [[0; 32]; 32],
                     tiles: [[0; 32]; 32],
+                    flips: [[Flip::None; 32]; 32],
                 });
             }
         }

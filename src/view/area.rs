@@ -202,7 +202,9 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         if tile_idx as usize >= self.palettes[palette_idx].tiles.len() {
                             continue;
                         }
+                        let flip = screen.flips[ty][tx];
                         let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
+                        let tile = flip.apply(tile);
                         let cb = &color_bytes[palette_idx];
                         let mut tile_addr = screen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
                         for py in 0..8 {
@@ -235,7 +237,9 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         let palette_id = self.tile_block.palettes[ty][tx];
                         if let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) {
                             let tile_idx = self.tile_block.tiles[ty][tx];
+                            let flip = self.tile_block.flips[ty][tx];
                             let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
+                            let tile = flip.apply(tile);
                             let cb = &color_bytes[palette_idx];
                             let mut tile_addr =
                                 base_addr + ty * 8 * row_stride + tx * 8 * col_stride;

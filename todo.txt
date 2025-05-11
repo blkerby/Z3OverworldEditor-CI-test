@@ -1,8 +1,9 @@
 Some features still needed:
 - Import from ROM: palettes, tiles, and areas
+- export PNG
 - Swap tiles (within and between palettes), updating area data
 - Undo
 - Way to open a second area/scratch in side panel (instead of palette/tileset editor)
-- Collision data
+- Include collision & reflectability data
 - World editor
 - Export to ROM

@@ -145,7 +145,7 @@ impl Constants {
 }
 
 #[derive(Clone)]
-pub struct Rom {
+struct Rom {
     pub data: Vec<u8>,
 }
 
