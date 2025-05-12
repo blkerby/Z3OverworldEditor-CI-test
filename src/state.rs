@@ -215,6 +215,7 @@ pub struct EditorState {
     // Tile editing state:
     pub tile_idx: Option<TileIdx>,
     pub selected_tile: Tile,
+    pub flip: Flip,
 
     // Graphics editing state:
     pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
@@ -295,6 +296,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         color_idx: None,
         selected_color: (0, 0, 0),
         tile_idx: None,
+        flip: Flip::None,
         selected_tile: [[0; 8]; 8],
         selection_source: SelectionSource::MainArea,
         start_coords: None,

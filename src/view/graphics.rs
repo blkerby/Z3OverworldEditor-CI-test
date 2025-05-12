@@ -1,13 +1,13 @@
 // Module for displaying and editing 8x8 graphics pixel-by-pixel
 use iced::{
     mouse,
-    widget::{canvas, Column},
+    widget::{canvas, column, horizontal_space, row, text, Column},
     Element, Size,
 };
 
 use crate::{
     message::Message,
-    state::{ColorRGB, EditorState, PixelCoord, Tile},
+    state::{ColorRGB, EditorState, Flip, PixelCoord, Tile},
 };
 
 #[derive(Debug)]
@@ -156,7 +156,21 @@ pub fn graphics_view(state: &EditorState) -> Element<Message> {
         .width(400)
         .align_x(iced::alignment::Horizontal::Center);
     if let Some(idx) = state.tile_idx {
-        col = col.push(
+        col = col.push(row![
+            column![
+                text(format!("Tile: {}", idx)),
+                text(format!(
+                    "{}flip",
+                    match state.flip {
+                        Flip::None => "No ",
+                        Flip::Horizontal => "H-",
+                        Flip::Vertical => "V-",
+                        Flip::Both => "HV-",
+                    }
+                )),
+            ]
+            .padding(10),
+            horizontal_space(),
             canvas(GraphicsBox {
                 colors: pal.colors,
                 tile: pal.tiles[idx as usize],
@@ -168,7 +182,8 @@ pub fn graphics_view(state: &EditorState) -> Element<Message> {
             })
             .width(24 * 8 + 2)
             .height(24 * 8 + 4),
-        );
+            horizontal_space()
+        ]);
     }
     col.into()
 }

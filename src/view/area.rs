@@ -152,6 +152,23 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         }
                     }
                 }
+                mouse::Event::ButtonPressed(mouse::Button::Right) => {
+                    state.action = InternalStateAction::None;
+                    let coords = if let Some(p) = cursor.position() {
+                        clamped_position_in(p, bounds, self.area.size, self.pixel_size)
+                    } else if let Some(c) = self.end_coords {
+                        Point::new(c.0, c.1)
+                    } else {
+                        return (canvas::event::Status::Ignored, None);
+                    };
+                    let palette_id = self.area.get_palette(coords.x, coords.y);
+                    let tile_idx = self.area.get_tile(coords.x, coords.y);
+                    let flip = self.area.get_flip(coords.x, coords.y);
+                    return (
+                        canvas::event::Status::Captured,
+                        Some(Message::OpenTile { palette_id, tile_idx, flip }),
+                    );
+                }
                 // mouse::Event::CursorLeft => {}
                 _ => {}
             },

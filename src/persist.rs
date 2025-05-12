@@ -19,7 +19,7 @@ use crate::{
 
 fn save_json<T: Serialize>(path: &Path, data: &T) -> Result<()> {
     info!("Saving {}", path.display());
-    let formatter = PrettyCompactFormatter::new();
+    let formatter = PrettyCompactFormatter::new().with_max_line_length(200);
     let mut data_bytes = vec![];
     let mut ser = Serializer::with_formatter(&mut data_bytes, formatter);
     data.serialize(&mut ser).unwrap();

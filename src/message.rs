@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use iced::Point;
 
-use crate::state::{ColorIdx, ColorValue, PixelCoord, TileCoord, TileIdx};
+use crate::state::{ColorIdx, ColorValue, Flip, PaletteId, PixelCoord, TileCoord, TileIdx};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SelectionSource {
@@ -67,4 +67,9 @@ pub enum Message {
     ProgressTileSelection(Point<TileCoord>),
     EndTileSelection(Point<TileCoord>),
     AreaBrush(Point<TileCoord>),
+    OpenTile {
+        palette_id: PaletteId,
+        tile_idx: TileIdx,
+        flip: Flip
+    }
 }

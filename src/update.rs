@@ -802,9 +802,12 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 let mut gfx_row: Vec<Tile> = vec![];
                 for x in 0..s.size.0 {
                     let palette_id = s.palettes[y as usize][x as usize];
-                    let palette_idx = state.palettes_id_idx_map[&palette_id];
                     let tile_idx = s.tiles[y as usize][x as usize];
-                    let tile = state.palettes[palette_idx].tiles[tile_idx as usize];
+                    let tile = if let Some(&idx) = state.palettes_id_idx_map.get(&palette_id) {
+                        state.palettes[idx as usize].tiles[tile_idx as usize]
+                    } else {
+                        [[0; 8]; 8]
+                    };
                     gfx_row.push(tile);
                 }
                 state.selected_gfx.push(gfx_row);
@@ -826,6 +829,15 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 }
             }
             state.area.modified = true;
+        }
+        Message::OpenTile {
+            palette_id,
+            tile_idx,
+            flip,
+        } => {
+            state.palette_idx = state.palettes_id_idx_map[&palette_id];
+            state.tile_idx = Some(tile_idx);
+            state.flip = flip;
         }
     }
     Task::none()

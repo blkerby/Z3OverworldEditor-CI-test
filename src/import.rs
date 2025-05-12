@@ -1,9 +1,6 @@
 use anyhow::{bail, ensure, Context, Result};
-use iced::{
-    widget::{button, column, container, horizontal_space, row, text},
-    Element,
-};
-use log::info;
+use itertools::Itertools;
+use log::{info, warn};
 use std::{
     fmt::Display,
     ops::{Add, AddAssign},
@@ -11,20 +8,18 @@ use std::{
 };
 
 use crate::{
-    message::Message,
-    persist::save_project,
-    state::{ColorRGB, ColorValue, EditorState, Palette, PaletteId, Tile},
+    persist::{save_area, save_project},
+    state::{Area, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile},
     update::update_palette_order,
-    view::modal_background_style,
 };
 
 // From past experience, it's a very common mistake to mix up SNES addresses
 // with "PC" addresses (byte index into the ROM file). So we use type-safe wrappers
 // to make these harder to mess up:
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct PcAddr(u32);
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct SnesAddr(u32);
 
 macro_rules! impl_add {
@@ -39,10 +34,8 @@ macro_rules! impl_add {
     };
 }
 
-impl_add!(PcAddr, i32);
-impl_add!(PcAddr, usize);
-impl_add!(SnesAddr, i32);
-impl_add!(SnesAddr, usize);
+impl_add!(PcAddr, u32);
+impl_add!(SnesAddr, u32);
 
 macro_rules! impl_add_assign {
     ($target_type:ident, $other_type:ident) => {
@@ -54,10 +47,8 @@ macro_rules! impl_add_assign {
     };
 }
 
-impl_add_assign!(PcAddr, i32);
-impl_add_assign!(PcAddr, usize);
-impl_add_assign!(SnesAddr, i32);
-impl_add_assign!(SnesAddr, usize);
+impl_add_assign!(PcAddr, u32);
+impl_add_assign!(SnesAddr, u32);
 
 impl Display for PcAddr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -87,47 +78,97 @@ impl From<SnesAddr> for PcAddr {
     fn from(addr: SnesAddr) -> Self {
         // It would be a mistake if we ever reference the lower half of a bank
         // (which would often map to RAM, registers, etc. rather than to ROM).
-        // Likewise we don't reference the upper/mirrored banks:
-        assert!(addr.0 & 0x808000 == 0x8000);
+        assert!(addr.0 & 0x8000 == 0x8000);
 
         PcAddr(addr.0 >> 1 & 0x3F8000 | addr.0 & 0x7FFF)
     }
 }
 
-// Addresses of where certain data is located in the ROM. Some of these vary
+// Addresses of where certain data is located in the ROM. Many of these vary
 // between JP and US versions.
 struct Constants {
+    hud_palettes_addr: SnesAddr,
     main_palettes_addr: SnesAddr,
     aux_palettes_addr: SnesAddr,
     animated_palettes_addr: SnesAddr,
     gfx_bank_addr: SnesAddr,
     gfx_high_addr: SnesAddr,
     gfx_low_addr: SnesAddr,
-    tiles_16x16_addr: SnesAddr,
+    tiles16_addr: SnesAddr,
+    tiles16_cnt: u32,
+    tiles32_tl_addr: SnesAddr,
+    tiles32_tr_addr: SnesAddr,
+    tiles32_bl_addr: SnesAddr,
+    tiles32_br_addr: SnesAddr,
+    tiles32_cnt: u32,
+    map_high_addr: SnesAddr,
+    map_low_addr: SnesAddr,
+    map_cnt: u32,
+    map_pal_set_addr: SnesAddr,
+    special_map_pal_set_addr: SnesAddr,
+    pal_set_addr: SnesAddr,
+    global_gfx_set_addr: SnesAddr,
+    local_gfx_set_addr: SnesAddr,
+    map_gfx_set_addr: SnesAddr,
+    special_gfx_set_addr: SnesAddr,
 }
 
 impl Constants {
     fn jp() -> Self {
         Constants {
+            hud_palettes_addr: SnesAddr(0x1BD660),
             main_palettes_addr: SnesAddr(0x1BE6C8),
             aux_palettes_addr: SnesAddr(0x1BE86C),
             animated_palettes_addr: SnesAddr(0x1BE604),
             gfx_bank_addr: SnesAddr(0x00E7D0),
             gfx_high_addr: SnesAddr(0x00E7D5),
             gfx_low_addr: SnesAddr(0x00E7DA),
-            tiles_16x16_addr: SnesAddr(0x0F8000),
+            tiles16_addr: SnesAddr(0x0F8000),
+            tiles16_cnt: 3742,
+            tiles32_tl_addr: SnesAddr(0x038000),
+            tiles32_tr_addr: SnesAddr(0x03B3C0),
+            tiles32_bl_addr: SnesAddr(0x048000),
+            tiles32_br_addr: SnesAddr(0x04B3C0),
+            tiles32_cnt: 8828,
+            map_high_addr: SnesAddr(0x02F6B1),
+            map_low_addr: SnesAddr(0x02F891),
+            map_cnt: 160,
+            map_pal_set_addr: SnesAddr(0x00FD1C),
+            special_map_pal_set_addr: SnesAddr(0x02E595),
+            pal_set_addr: SnesAddr(0x0CFE74),
+            global_gfx_set_addr: SnesAddr(0x00E0B3),
+            local_gfx_set_addr: SnesAddr(0x00DDD7),
+            map_gfx_set_addr: SnesAddr(0x00FC9C),
+            special_gfx_set_addr: SnesAddr(0x02E585), // appears incorrect in ZS?
         }
     }
 
     fn us() -> Self {
         Constants {
+            hud_palettes_addr: SnesAddr(0x1BD660),
             main_palettes_addr: SnesAddr(0x1BE6C8),
             aux_palettes_addr: SnesAddr(0x1BE86C),
             animated_palettes_addr: SnesAddr(0x1BE604),
             gfx_bank_addr: SnesAddr(0x00E790),
             gfx_high_addr: SnesAddr(0x00E795),
             gfx_low_addr: SnesAddr(0x00E79A),
-            tiles_16x16_addr: SnesAddr(0x0F8000),
+            tiles16_addr: SnesAddr(0x0F8000),
+            tiles16_cnt: 3742,
+            tiles32_tl_addr: SnesAddr(0x038000),
+            tiles32_tr_addr: SnesAddr(0x03B400),
+            tiles32_bl_addr: SnesAddr(0x048000),
+            tiles32_br_addr: SnesAddr(0x04B400),
+            tiles32_cnt: 8864,
+            map_high_addr: SnesAddr(0x02F94D),
+            map_low_addr: SnesAddr(0x02FB2D),
+            map_cnt: 160,
+            map_pal_set_addr: SnesAddr(0x00FD1C),
+            special_map_pal_set_addr: SnesAddr(0x02E831),
+            pal_set_addr: SnesAddr(0x0ED504),
+            global_gfx_set_addr: SnesAddr(0x00E073),
+            local_gfx_set_addr: SnesAddr(0x0DD97),
+            map_gfx_set_addr: SnesAddr(0x00FC9C),
+            special_gfx_set_addr: SnesAddr(0x02E821),
         }
     }
 
@@ -141,6 +182,7 @@ impl Constants {
         } else {
             bail!("Unknown ROM format.");
         }
+        // TODO: check for expanded 32x32 tiles from ZScream
     }
 }
 
@@ -149,15 +191,66 @@ struct Rom {
     pub data: Vec<u8>,
 }
 
-// struct Tile16 {
-//     top_left:
-// }
+#[derive(Copy, Clone, Debug)]
+struct Tile8 {
+    gfx_char: u16, // Index into area-loaded graphics tiles (0-1023)
+    pal_idx: u8,   // Index into area-loaded palettes (0-7)
+    priority: bool,
+    flip: Flip,
+}
+
+impl Tile8 {
+    pub fn from_vram_tilemap_word(w: u16) -> Self {
+        Self {
+            gfx_char: w & 0x3FF,
+            pal_idx: ((w >> 10) & 7) as u8,
+            priority: (w >> 13) & 1 == 1,
+            flip: match w >> 14 {
+                0 => Flip::None,
+                1 => Flip::Horizontal,
+                2 => Flip::Vertical,
+                3 => Flip::Both,
+                _ => panic!("error decoding flip"),
+            },
+        }
+    }
+}
+
+type Tile16 = [Tile8; 4];
+
+// Index into Importer::tiles16
+type Tile16Idx = u16;
+
+type Tile32 = [Tile16Idx; 4];
+
+// Index into Importer::tiles32
+type Tile32Idx = u16;
+
+type MapIdx = u16;
+
+#[derive(Debug)]
+struct MapPalettes {
+    main: u8,
+    aux1: u8,
+    aux2: u8,
+    animated: u8,
+}
 
 pub struct Importer<'a> {
     state: &'a mut EditorState,
     constants: Constants,
     rom: Rom,
-    // tiles16: Vec<Tile16>,
+    hud_palette_ids: Vec<[PaletteId; 2]>,
+    main_palette_ids: Vec<[PaletteId; 5]>,
+    aux_palette_ids: Vec<[PaletteId; 3]>,
+    animated_palette_ids: Vec<PaletteId>,
+    tiles8: Vec<[[u8; 8]; 8]>, // 3bpp tile color indices (0-7)
+    tiles16: Vec<Tile16>,
+    tiles32: Vec<Tile32>,
+    map_tiles: Vec<[[Tile32Idx; 16]; 16]>,
+    map_parents: Vec<MapIdx>,
+    map_palettes: Vec<MapPalettes>,
+    map_gfx: Vec<[u8; 8]>,
 }
 
 impl Rom {
@@ -191,6 +284,17 @@ impl Rom {
         let b0 = self.data[addr.0 as usize] as u16;
         let b1 = self.data[addr.0 as usize + 1] as u16;
         Ok(b0 | b1 << 8)
+    }
+
+    pub fn read_u24(&self, addr: PcAddr) -> Result<u32> {
+        ensure!(
+            addr.0 as usize + 2 < self.data.len(),
+            "read_u24 address out of bounds"
+        );
+        let b0 = self.data[addr.0 as usize] as u32;
+        let b1 = self.data[addr.0 as usize + 1] as u32;
+        let b2 = self.data[addr.0 as usize + 2] as u32;
+        Ok(b0 | b1 << 8 | b2 << 16)
     }
 
     pub fn read_n(&self, addr: PcAddr, n: usize) -> Result<&[u8]> {
@@ -267,6 +371,17 @@ impl<'a> Importer<'a> {
             state,
             constants: Constants::auto(&rom)?,
             rom,
+            hud_palette_ids: vec![],
+            main_palette_ids: vec![],
+            aux_palette_ids: vec![],
+            animated_palette_ids: vec![],
+            tiles8: vec![],
+            tiles16: vec![],
+            tiles32: vec![],
+            map_tiles: vec![],
+            map_parents: vec![],
+            map_palettes: vec![],
+            map_gfx: vec![],
         })
     }
 
@@ -274,6 +389,13 @@ impl<'a> Importer<'a> {
         let starting_palette_id = 100;
         self.import_all_palettes(starting_palette_id)?;
         self.load_graphics()?;
+        self.load_16x16_tiles()?;
+        self.load_32x32_tiles()?;
+        self.load_map_tiles()?;
+        self.load_map_parents()?;
+        self.load_map_palettes()?;
+        self.load_map_gfx()?;
+        self.load_areas()?;
         save_project(self.state)?;
         Ok(())
     }
@@ -287,7 +409,7 @@ impl<'a> Importer<'a> {
     ) -> Result<()> {
         let mut colors = [(0, 0, 0); 16];
         for i in 0..size {
-            let c = self.rom.read_u16(addr + i * 2)?;
+            let c = self.rom.read_u16(addr + i as u32 * 2)?;
             let r = c & 31;
             let g = (c >> 5) & 31;
             let b = (c >> 10) & 31;
@@ -305,21 +427,38 @@ impl<'a> Importer<'a> {
 
     fn import_all_palettes(&mut self, mut id: PaletteId) -> Result<()> {
         let palette_groups = [
-            ("Main", self.constants.main_palettes_addr, 6, 5),
-            ("Aux", self.constants.aux_palettes_addr, 20, 3),
-            ("Animated", self.constants.animated_palettes_addr, 14, 1),
+            ("HUD", self.constants.hud_palettes_addr, 1, 2, 15),
+            ("Main", self.constants.main_palettes_addr, 6, 5, 7),
+            ("Aux", self.constants.aux_palettes_addr, 20, 3, 7),
+            ("Animated", self.constants.animated_palettes_addr, 14, 1, 7),
         ];
 
         self.state.palettes.clear();
-        for (group_name, base_addr, cnt_pal, cnt_rows) in palette_groups {
+        for (group_name, base_addr, cnt_pal, cnt_rows, size) in palette_groups {
             let base_addr: PcAddr = base_addr.into();
             for i in 0..cnt_pal {
+                let mut palette_ids: Vec<PaletteId> = vec![];
                 for j in 0..cnt_rows {
                     let name = format!("{} {:x}-{}", group_name, i, j);
-                    let addr = base_addr + ((i * cnt_rows + j) * 7) * 2;
-                    let size = 7;
-                    self.import_palette(addr, size, &name, id)?;
+                    let addr = base_addr + ((i * cnt_rows + j) * size) * 2;
+                    palette_ids.push(id);
+                    self.import_palette(addr, size as usize, &name, id)?;
                     id += 1;
+                }
+                match group_name {
+                    "HUD" => {
+                        self.hud_palette_ids.push(palette_ids.try_into().unwrap());
+                    }
+                    "Main" => {
+                        self.main_palette_ids.push(palette_ids.try_into().unwrap());
+                    }
+                    "Aux" => {
+                        self.aux_palette_ids.push(palette_ids.try_into().unwrap());
+                    }
+                    "Animated" => {
+                        self.animated_palette_ids.push(palette_ids[0]);
+                    }
+                    _ => panic!("unexpected group_name"),
                 }
             }
         }
@@ -333,19 +472,18 @@ impl<'a> Importer<'a> {
         let gfx_high = rom.read_u16(self.constants.gfx_high_addr.into())?;
         let gfx_low = rom.read_u16(self.constants.gfx_low_addr.into())?;
 
-        let mut tiles: Vec<Tile> = vec![];
         for i in 0..113 {
             let bank = rom.read_u8(SnesAddr::from_bank_offset(0x00, gfx_bank + i).into())?;
             let high = rom.read_u8(SnesAddr::from_bank_offset(0x00, gfx_high + i).into())?;
             let low = rom.read_u8(SnesAddr::from_bank_offset(0x00, gfx_low + i).into())?;
             let addr = SnesAddr::from_bytes(bank, high, low);
-            let data = decompress(rom, addr.into())?;
+            let data = decompress(rom, addr.into(), false)?;
             if data.len() != 0x600 {
                 bail!("Unexpected graphics sheet length: {}", data.len());
             }
 
             for j in 0..64 {
-                let mut tile: Tile = [[0; 8]; 8];
+                let mut tile: [[u8; 8]; 8] = [[0; 8]; 8];
                 for y in 0..8 {
                     for x in 0..8 {
                         let c0 = (data[j * 24 + y * 2] >> (7 - x)) & 1;
@@ -355,20 +493,344 @@ impl<'a> Importer<'a> {
                         tile[y][x] = c;
                     }
                 }
-                tiles.push(tile);
+                self.tiles8.push(tile);
             }
         }
-        self.state.palettes[0].tiles = tiles;
-        self.state.palettes[0].modified = true;
+
+        for p in &mut self.state.palettes {
+            p.tiles = self.tiles8.clone();
+            p.modified = true;
+        }
         Ok(())
     }
 
     fn load_16x16_tiles(&mut self) -> Result<()> {
+        for i in 0..self.constants.tiles16_cnt {
+            let addr = self.constants.tiles16_addr + i * 8;
+            let tl = self.rom.read_u16(addr.into())?;
+            let tr = self.rom.read_u16((addr + 2).into())?;
+            let bl = self.rom.read_u16((addr + 4).into())?;
+            let br = self.rom.read_u16((addr + 6).into())?;
+            self.tiles16.push([
+                Tile8::from_vram_tilemap_word(tl),
+                Tile8::from_vram_tilemap_word(tr),
+                Tile8::from_vram_tilemap_word(bl),
+                Tile8::from_vram_tilemap_word(br),
+            ]);
+        }
+        Ok(())
+    }
+
+    fn load_32x32_tiles(&mut self) -> Result<()> {
+        let rom = &self.rom;
+        let quadrant_base_addrs: [PcAddr; 4] = [
+            self.constants.tiles32_tl_addr.into(),
+            self.constants.tiles32_tr_addr.into(),
+            self.constants.tiles32_bl_addr.into(),
+            self.constants.tiles32_br_addr.into(),
+        ];
+        let mut offset = 0;
+        let tiles32_size = self.constants.tiles32_cnt * 6 / 4;
+        while offset < tiles32_size {
+            for i in 0..4 {
+                let mut quadrant_idxs = vec![];
+                for base_addr in quadrant_base_addrs {
+                    let addr = base_addr + offset;
+                    let tile16_idx = match i {
+                        0 => {
+                            rom.read_u8(addr)? as u16 | (rom.read_u8(addr + 4)? as u16 & 0xF0) << 4
+                        }
+                        1 => {
+                            rom.read_u8(addr + 1)? as u16
+                                | (rom.read_u8(addr + 4)? as u16 & 0x0F) << 8
+                        }
+                        2 => {
+                            rom.read_u8(addr + 2)? as u16
+                                | (rom.read_u8(addr + 5)? as u16 & 0xF0) << 4
+                        }
+                        3 => {
+                            rom.read_u8(addr + 3)? as u16
+                                | (rom.read_u8(addr + 5)? as u16 & 0x0F) << 8
+                        }
+                        _ => panic!("error loading 32x32 map tiles"),
+                    };
+                    ensure!((tile16_idx as usize) < self.tiles16.len());
+                    quadrant_idxs.push(tile16_idx);
+                }
+                if self.tiles32.len() == 0 || self.tiles32.len() == 1570 {
+                    info!("tile {}: {:x?}", self.tiles32.len(), quadrant_idxs);
+                }
+                self.tiles32.push([
+                    quadrant_idxs[0],
+                    quadrant_idxs[1],
+                    quadrant_idxs[2],
+                    quadrant_idxs[3],
+                ]);
+            }
+            offset += 6;
+        }
+        Ok(())
+    }
+
+    fn load_map_tiles(&mut self) -> Result<()> {
+        let rom = &self.rom;
+        for i in 0..self.constants.map_cnt {
+            let high_addr = SnesAddr(rom.read_u24((self.constants.map_high_addr + i * 3).into())?);
+            let high_data = decompress(rom, high_addr.into(), true)?;
+
+            let low_addr = SnesAddr(rom.read_u24((self.constants.map_low_addr + i * 3).into())?);
+            let low_data = decompress(rom, low_addr.into(), true)?;
+
+            ensure!(high_data.len() == 256);
+            ensure!(low_data.len() == 256);
+
+            let mut block: [[Tile32Idx; 16]; 16] = [[0; 16]; 16];
+            for y in 0..16 {
+                for x in 0..16 {
+                    let j = y * 16 + x;
+                    let mut tile32_idx = (high_data[j] as u16) << 8 | low_data[j] as u16;
+                    if (tile32_idx as u32) >= self.constants.tiles32_cnt {
+                        // This happens in the US ROM (TODO: look into why).
+                        info!(
+                            "World block ${:X} (x={}, y={}): tile32 index {} out of bounds ({})",
+                            i, x, y, tile32_idx, self.constants.tiles32_cnt
+                        );
+                        tile32_idx = 0;
+                    }
+
+                    block[y][x] = tile32_idx;
+                }
+            }
+            self.map_tiles.push(block);
+        }
+        Ok(())
+    }
+
+    fn load_map_parents(&mut self) -> Result<()> {
+        let mut parents: Vec<MapIdx> = (0..self.constants.map_cnt as MapIdx).collect();
+
+        // Large areas:
+        for i in [0, 3, 5, 24, 27, 30, 48, 53] {
+            for j in [0, 64] {
+                parents[i + j + 1] = (i + j) as MapIdx;
+                parents[i + j + 8] = (i + j) as MapIdx;
+                parents[i + j + 9] = (i + j) as MapIdx;
+            }
+        }
+
+        parents[130] = 129;
+        parents[137] = 129;
+        parents[138] = 129;
+        parents[148] = 128;
+        parents[149] = 3;
+        parents[150] = 91;
+        parents[151] = 0;
+        parents[156] = 67;
+        parents[157] = 0;
+        parents[158] = 0;
+        parents[159] = 44;
+
+        self.map_parents = parents;
+        Ok(())
+    }
+
+    fn load_map_palettes(&mut self) -> Result<()> {
+        let rom = &self.rom;
+        for i in 0..self.constants.map_cnt as usize {
+            let main = match i {
+                3 | 5 | 7 => 2,          // Light World: death mountain
+                0..0x40 => 0,            // Rest of Light World
+                0x43 | 0x45 | 0x47 => 3, // Dark World: death mountain
+                0x40..0x80 => 1,         // Rest of Dark World
+                0x88 => 4,               // Triforce room
+                0x80..0xA0 => 0,         // Special World
+                _ => panic!("internal error"),
+            };
+            let parent = self.map_parents[i];
+            let pal_set = if i == 0x88 {
+                0
+            } else if parent >= 0x80 {
+                rom.read_u8(
+                    (self.constants.special_map_pal_set_addr + (parent as u32 - 0x80)).into(),
+                )?
+            } else {
+                rom.read_u8((self.constants.map_pal_set_addr + parent as u32).into())?
+            };
+            let pal_set_addr = self.constants.pal_set_addr + pal_set as u32 * 4;
+            let mut aux1 = rom.read_u8(pal_set_addr.into())?;
+            let mut aux2 = rom.read_u8((pal_set_addr + 1).into())?;
+            let mut animated = rom.read_u8((pal_set_addr + 2).into())?;
+            if aux1 >= 20 {
+                warn!("out-of-range aux1: {}", aux1);
+                aux1 = 0;
+            }
+            if aux2 >= 20 {
+                warn!("out-of-range aux2: {}", aux2);
+                aux2 = 0;
+            }
+            if animated >= 14 {
+                warn!("out-of-range animated: {}", animated);
+                animated = 0;
+            }
+            self.map_palettes.push(MapPalettes {
+                main,
+                aux1,
+                aux2,
+                animated,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn load_map_gfx(&mut self) -> Result<()> {
+        let rom = &self.rom;
+        let global_gfx_set_addr = self.constants.global_gfx_set_addr;
+        let local_gfx_set_addr = self.constants.local_gfx_set_addr;
+        let map_gfx_set_addr = self.constants.map_gfx_set_addr;
+        let special_gfx_set_addr = self.constants.special_gfx_set_addr;
+        for i in 0..self.constants.map_cnt as usize {
+            let parent = self.map_parents[i];
+            let global_idx = match parent {
+                0x40..0x80 => 0x21, // Dark World
+                0x88 => 0x24,       // Triforce room
+                _ => 0x20,          // Light World
+            };
+            let mut gfx: Vec<u8> = rom
+                .read_n((global_gfx_set_addr + global_idx * 8).into(), 8)?
+                .to_owned();
+            let local_idx = match parent {
+                0x88 => 81,
+                0x80.. => rom.read_u8((special_gfx_set_addr + (parent - 0x80) as u32).into())?,
+                _ => rom.read_u8((map_gfx_set_addr + parent as u32).into())?,
+            };
+            let local_gfx: &[u8] =
+                rom.read_n((local_gfx_set_addr + local_idx as u32 * 4).into(), 4)?;
+            for j in 0..4 {
+                if local_gfx[j] != 0 {
+                    gfx[3 + j] = local_gfx[j];
+                }
+            }
+            info!(
+                "i={:x}, local_idx=${:x}, local_gfx={:x?}, gfx={:x?}",
+                i, local_idx, local_gfx, gfx
+            );
+            self.map_gfx.push(gfx.try_into().unwrap());
+        }
+
+        Ok(())
+    }
+
+    fn load_areas(&mut self) -> Result<()> {
+        let tile32_offsets = [(0, 0), (2, 0), (0, 2), (2, 2)];
+        let tile16_offsets = [(0, 0), (1, 0), (0, 1), (1, 1)];
+        for parent in 0..0xA0 {
+            if self.map_parents[parent] as usize != parent {
+                continue;
+            }
+            let world_idx = parent / 64;
+            let _block_y = (parent / 8) % 8;
+            let block_x = parent % 8;
+            let size = if block_x <= 6 && self.map_parents[parent + 1] as usize == parent {
+                (2, 2)
+            } else {
+                (1, 1)
+            };
+            let mut gfx_idxs: Vec<u16> = vec![];
+            for idx in self.map_gfx[parent] {
+                gfx_idxs.extend((idx as u16 * 64)..((idx + 1) as u16 * 64));
+            }
+            let animated_gfx = if [0x03, 0x05, 0x07, 0x43, 0x45, 0x47].contains(&parent) {
+                0x59
+            } else {
+                0x5B
+            };
+            gfx_idxs[0x1C0..0x1E0]
+                .copy_from_slice(&((animated_gfx * 64)..(animated_gfx * 64 + 32)).collect_vec());
+
+            let pal = &self.map_palettes[parent];
+            let mut area: Area = Area {
+                modified: true,
+                name: match world_idx {
+                    0 => format!("{:02X} Light World", parent),
+                    1 => format!("{:02X} Dark World", parent),
+                    2 => format!("{:02X} Special World", parent),
+                    _ => bail!("unexpected world_idx: {}", world_idx),
+                },
+                theme: "Base".to_string(),
+                size: (size.0 * 2, size.1 * 2),
+                screens: vec![],
+            };
+            for y in 0..size.1 * 2 {
+                for x in 0..size.0 * 2 {
+                    area.screens.push(Screen {
+                        position: (x, y),
+                        palettes: [[0; 32]; 32],
+                        tiles: [[0; 32]; 32],
+                        flips: [[Flip::None; 32]; 32],
+                    });
+                }
+            }
+            for my in 0..size.1 as usize {
+                for mx in 0..size.0 as usize {
+                    let map_idx = parent + my as usize * 8 + mx as usize;
+                    let tiles = &self.map_tiles[map_idx];
+                    for ty in 0..16 {
+                        for tx in 0..16 {
+                            let t32_idx = tiles[ty][tx];
+                            let t32 = self.tiles32[t32_idx as usize];
+                            for i in 0..4 {
+                                let t16_idx = t32[i];
+                                let t16 = self.tiles16[t16_idx as usize];
+                                for j in 0..4 {
+                                    let t8 = t16[j];
+                                    let x = mx * 64
+                                        + tx * 4
+                                        + tile32_offsets[i].0
+                                        + tile16_offsets[j].0;
+                                    let y = my * 64
+                                        + ty * 4
+                                        + tile32_offsets[i].1
+                                        + tile16_offsets[j].1;
+                                    let tile_idx = gfx_idxs[t8.gfx_char as usize];
+                                    let gfx_sheet = t8.gfx_char / 64;
+                                    ensure!(gfx_sheet < 8);
+                                    let pal_high = [0, 3, 4, 5].contains(&gfx_sheet);
+                                    let pal_idx = match (t8.pal_idx, pal_high) {
+                                        (p @ (0 | 1), _) => self.hud_palette_ids[0][p as usize],
+                                        (p @ 2..=6, false) => {
+                                            self.main_palette_ids[pal.main as usize][p as usize - 2]
+                                        }
+                                        (7, false) => {
+                                            self.animated_palette_ids[pal.animated as usize]
+                                        }
+                                        (p @ 2..=4, true) => {
+                                            self.aux_palette_ids[pal.aux1 as usize][p as usize - 2]
+                                        }
+                                        (p @ 5..=7, true) => {
+                                            self.aux_palette_ids[pal.aux2 as usize][p as usize - 5]
+                                        }
+                                        _ => {
+                                            bail!("unexpected palette: {} {}", t8.pal_idx, pal_high)
+                                        }
+                                    };
+                                    area.set_tile(x as u16, y as u16, tile_idx);
+                                    area.set_palette(x as u16, y as u16, pal_idx);
+                                    area.set_flip(x as u16, y as u16, t8.flip);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            self.state.area = area;
+            save_area(self.state)?;
+        }
         Ok(())
     }
 }
 
-fn decompress(rom: &Rom, mut addr: PcAddr) -> Result<Vec<u8>> {
+fn decompress(rom: &Rom, mut addr: PcAddr, big_endian_offset: bool) -> Result<Vec<u8>> {
     let mut out: Vec<u8> = Vec::new();
     loop {
         let byte = rom.read_u8(addr)? as isize;
@@ -390,7 +852,7 @@ fn decompress(rom: &Rom, mut addr: PcAddr) -> Result<Vec<u8>> {
             0 => {
                 // Raw block
                 out.extend(rom.read_n(addr, size)?);
-                addr += size;
+                addr += size as u32;
             }
             1 => {
                 // Byte-level RLE block
@@ -419,7 +881,11 @@ fn decompress(rom: &Rom, mut addr: PcAddr) -> Result<Vec<u8>> {
             }
             4 => {
                 // Copy earlier output, with absolute offset:
-                let offset = rom.read_u16(addr)? as usize;
+                let offset = if big_endian_offset {
+                    (rom.read_u8(addr)? as usize) << 8 | rom.read_u8(addr + 1)? as usize
+                } else {
+                    rom.read_u16(addr)? as usize
+                };
                 assert!(offset < out.len());
                 addr += 2;
                 for i in offset..(offset + size) {
