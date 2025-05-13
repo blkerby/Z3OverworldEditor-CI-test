@@ -62,19 +62,21 @@ pub fn settings_view(state: &EditorState) -> Element<Message> {
     .into()
 }
 
-pub fn import_rom_view(state: &EditorState) -> Element<Message> {
+pub fn import_rom_confirm_view(state: &EditorState) -> Element<Message> {
     container(
         column![
             text("Import project from ROM?"),
-            text("This may replace existing project data, including palettes, tilesets, and areas."),
+            text(
+                "This may replace existing project data, including palettes, tilesets, and areas."
+            ),
             row![
                 button(text("Import from ROM"))
-                .style(button::danger)
-                .on_press(Message::ImportROM),
+                    .style(button::danger)
+                    .on_press(Message::ImportROMProgress),
                 horizontal_space(),
                 button(text("Cancel"))
-                .style(button::secondary)
-                .on_press(Message::CloseDialogue),
+                    .style(button::secondary)
+                    .on_press(Message::CloseDialogue),
             ]
         ]
         .spacing(15),
@@ -83,4 +85,12 @@ pub fn import_rom_view(state: &EditorState) -> Element<Message> {
     .padding(25)
     .style(modal_background_style)
     .into()
+}
+
+pub fn import_rom_progress_view(state: &EditorState) -> Element<Message> {
+    container(text("Please wait while ROM is importing."))
+        .width(350)
+        .padding(25)
+        .style(modal_background_style)
+        .into()
 }

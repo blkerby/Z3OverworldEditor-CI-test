@@ -98,7 +98,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     Focus::GraphicsPixel => {
                         if let Some(coords) = state.pixel_coords {
                             if coords.0 < 7 {
-                                return Ok(Task::done(Message::SelectPixel(coords.0 + 1, coords.1)));
+                                return Ok(Task::done(Message::SelectPixel(
+                                    coords.0 + 1,
+                                    coords.1,
+                                )));
                             }
                         }
                     }
@@ -137,7 +140,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     Focus::GraphicsPixel => {
                         if let Some(coords) = state.pixel_coords {
                             if coords.0 > 0 {
-                                return Ok(Task::done(Message::SelectPixel(coords.0 - 1, coords.1)));
+                                return Ok(Task::done(Message::SelectPixel(
+                                    coords.0 - 1,
+                                    coords.1,
+                                )));
                             }
                         }
                     }
@@ -190,7 +196,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     Focus::GraphicsPixel => {
                         if let Some(coords) = state.pixel_coords {
                             if coords.1 < 7 {
-                                return Ok(Task::done(Message::SelectPixel(coords.0, coords.1 + 1)));
+                                return Ok(Task::done(Message::SelectPixel(
+                                    coords.0,
+                                    coords.1 + 1,
+                                )));
                             }
                         }
                     }
@@ -243,7 +252,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     Focus::GraphicsPixel => {
                         if let Some(coords) = state.pixel_coords {
                             if coords.1 > 0 {
-                                return Ok(Task::done(Message::SelectPixel(coords.0, coords.1 - 1)));
+                                return Ok(Task::done(Message::SelectPixel(
+                                    coords.0,
+                                    coords.1 - 1,
+                                )));
                             }
                         }
                     }
@@ -357,14 +369,21 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
             return Ok(Task::perform(open_rom(), Message::ImportConfirm));
         }
         Message::ImportConfirm(path) => {
-            state.rom_path = path.clone();
-            state.dialogue = Some(Dialogue::ImportROM);
+            if path.is_some() {
+                state.rom_path = path.clone();
+                state.dialogue = Some(Dialogue::ImportROMConfirm);
+            } else {
+                state.dialogue = Some(Dialogue::Settings);
+            }
+        }
+        Message::ImportROMProgress => {
+            state.dialogue = Some(Dialogue::ImportROMProgress);
+            return Ok(Task::done(Message::ImportROM));
         }
         Message::ImportROM => {
-            if let Some(path) = &state.rom_path {
-                Importer::import(state, &path.clone())?;
-                state.dialogue = None;
-            }
+            let path = state.rom_path.as_ref().context("internal error")?;
+            Importer::import(state, &path.clone())?;
+            state.dialogue = None;
         }
         Message::SelectPalette(name) => {
             for i in 0..state.palettes.len() {

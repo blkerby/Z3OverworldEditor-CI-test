@@ -244,12 +244,15 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                             for px in 0..8 {
                                 let color_idx = tile.pixels[py][px];
                                 let mut color = cb[color_idx as usize];
-                                let identify_color =
-                                    self.identify_color && self.color_idx == Some(color_idx);
-                                if identify_tile || identify_color {
+                                let identify_color = self.identify_color
+                                    && self.color_idx == Some(color_idx)
+                                    && self.palette_idx == palette_idx;
+                                let pink_highlight = [255, 105, 180];
+                                if identify_tile {
                                     let alpha = 0.5;
-                                    let pink_highlight = [255, 105, 180];
                                     color = alpha_blend(color, pink_highlight, alpha);
+                                } else if identify_color {
+                                    color = pink_highlight;
                                 }
                                 data[addr..(addr + 3)].copy_from_slice(&color);
                                 addr += 4;

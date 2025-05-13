@@ -185,7 +185,8 @@ impl Area {
 
 pub enum Dialogue {
     Settings,
-    ImportROM,
+    ImportROMConfirm,
+    ImportROMProgress,
     AddPalette { name: String, id: PaletteId },
     RenamePalette { name: String },
     DeletePalette,

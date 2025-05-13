@@ -18,7 +18,7 @@ use iced::{
 };
 use iced_aw::quad;
 use palette::{add_palette_view, delete_palette_view, palette_view, rename_palette_view};
-use settings::{import_rom_view, settings_view};
+use settings::{import_rom_confirm_view, import_rom_progress_view, settings_view};
 use tiles::tile_view;
 
 use crate::{
@@ -161,8 +161,19 @@ pub fn view(state: &EditorState) -> Element<Message> {
             Dialogue::DeleteTheme => {
                 main_view = modal(main_view, delete_theme_view(state), Message::HideModal);
             }
-            Dialogue::ImportROM => {
-                main_view = modal(main_view, import_rom_view(state), Message::HideModal);
+            Dialogue::ImportROMConfirm => {
+                main_view = modal(
+                    main_view,
+                    import_rom_confirm_view(state),
+                    Message::HideModal,
+                );
+            }
+            Dialogue::ImportROMProgress => {
+                main_view = modal(
+                    main_view,
+                    import_rom_progress_view(state),
+                    Message::HideModal,
+                );
             }
         }
     }

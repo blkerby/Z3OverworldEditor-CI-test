@@ -1,5 +1,4 @@
 Some features still needed:
-
 - during ROM import, show progress bar or something, to prevent clicking multiple times.
 - Include reflectability data
 - overlays

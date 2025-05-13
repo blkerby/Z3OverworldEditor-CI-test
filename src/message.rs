@@ -23,6 +23,7 @@ pub enum Message {
     CloseDialogue,
     ImportDialogue,
     ImportConfirm(Option<PathBuf>),
+    ImportROMProgress,
     ImportROM,
     SelectPalette(String),
     AddPaletteDialogue,
