@@ -114,6 +114,7 @@ pub struct Area {
     pub name: String,
     #[serde(skip_serializing, skip_deserializing)]
     pub theme: String,
+    pub bg_color: ColorRGB,
     // X and Y dimensions, measured in number of screens:
     pub size: (u8, u8),
     // A 'screen' is a 256x256 pixel section, roughly the size that fits on camera at once.
@@ -176,7 +177,7 @@ pub enum Dialogue {
     RenamePalette { name: String },
     DeletePalette,
     AddArea { name: String, size: (u8, u8) },
-    RenameArea { name: String },
+    EditArea { name: String },
     DeleteArea,
     AddTheme { name: String },
     RenameTheme { name: String },

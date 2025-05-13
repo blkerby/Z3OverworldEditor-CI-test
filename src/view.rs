@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use area::{
     add_area_view, add_theme_view, area_controls, area_grid_view, delete_area_view,
-    delete_theme_view, rename_area_view, rename_theme_view,
+    delete_theme_view, edit_area_view, rename_theme_view,
 };
 use graphics::graphics_view;
 use iced::{
@@ -57,7 +57,7 @@ where
                 container::Style {
                     background: Some(
                         iced::Color {
-                            a: 0.8,
+                            a: 0.5,
                             ..iced::Color::BLACK
                         }
                         .into(),
@@ -78,7 +78,6 @@ pub fn modal_background_style(theme: &Theme) -> container::Style {
         border: iced::border::rounded(4)
             .color(palette.background.weak.color)
             .width(1.0),
-        // shadow: iced::Shadow::
         ..container::Style::default()
     }
 }
@@ -142,8 +141,8 @@ pub fn view(state: &EditorState) -> Element<Message> {
             Dialogue::AddArea { name, size } => {
                 main_view = modal(main_view, add_area_view(name, *size), Message::HideModal);
             }
-            Dialogue::RenameArea { name } => {
-                main_view = modal(main_view, rename_area_view(state, name), Message::HideModal);
+            Dialogue::EditArea { name } => {
+                main_view = modal(main_view, edit_area_view(state, name), Message::HideModal);
             }
             Dialogue::DeleteArea => {
                 main_view = modal(main_view, delete_area_view(state), Message::HideModal);

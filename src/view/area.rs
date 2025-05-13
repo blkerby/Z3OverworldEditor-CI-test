@@ -187,14 +187,15 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
         renderer: &iced::Renderer,
         _theme: &iced::Theme,
         bounds: iced::Rectangle,
-        cursor: mouse::Cursor,
+        _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         let mut color_bytes: Vec<Vec<[u8; 4]>> = vec![];
 
         for i in 0..self.palettes.len() {
-            let cb = self.palettes[i]
-                .colors
+            let mut colors = self.palettes[i].colors.clone();
+            colors[0] = self.area.bg_color;
+            let cb = colors
                 .iter()
                 .map(|&(r, g, b)| [scale_color(r), scale_color(g), scale_color(b), 255])
                 .collect();
@@ -475,7 +476,7 @@ pub fn area_controls(state: &EditorState) -> Element<Message> {
             .style(button::success)
             .on_press(Message::AddAreaDialogue),
         button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
-            .on_press(Message::RenameAreaDialogue),
+            .on_press(Message::EditAreaDialogue),
         text("Theme"),
         pick_list(
             state.theme_names.clone(),
@@ -533,31 +534,48 @@ pub fn add_area_view(name: &String, size: (u8, u8)) -> Element<Message> {
     .into()
 }
 
-pub fn rename_area_view(state: &EditorState, name: &String) -> Element<'static, Message> {
+pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Message> {
     let old_name = state.area.name.clone();
+    let rgb_width = 80;
     container(
         column![
-            text(format!("Rename area \"{}\"", old_name)),
+            text(format!("Edit area \"{}\"", old_name)),
             row![
                 text("Name: ").width(70),
                 text_input("", name)
-                    .id("RenameArea")
-                    .on_input(Message::SetRenameAreaName)
-                    .on_submit(Message::RenameArea)
+                    .id("EditArea")
+                    .on_input(Message::SetEditAreaName)
+                    .on_submit(Message::EditArea)
             ]
             .spacing(10)
             .align_y(Vertical::Center),
+            row![text("Background color:")],
             row![
-                button(text("Rename area")).on_press(Message::RenameArea),
+                text("Red"),
+                number_input(&state.area.bg_color.0, 0..=31, Message::EditAreaBGRed)
+                    .width(rgb_width),
+                iced::widget::Space::with_width(10),
+                text("Green"),
+                number_input(&state.selected_color.1, 0..=31, Message::EditAreaBGGreen)
+                    .width(rgb_width),
+                iced::widget::Space::with_width(10),
+                text("Blue"),
+                number_input(&state.selected_color.2, 0..=31, Message::EditAreaBGBlue)
+                    .width(rgb_width),
+            ]
+            .spacing(5)
+            .align_y(iced::alignment::Vertical::Center),
+            row![
+                button(text("Edit area")).on_press(Message::EditArea),
                 Space::with_width(Length::Fill),
                 button(text("Delete area"))
                     .style(button::danger)
                     .on_press(Message::DeleteAreaDialogue),
             ],
         ]
-        .spacing(10),
+        .spacing(15),
     )
-    .width(350)
+    .width(450)
     .padding(25)
     .style(modal_background_style)
     .into()

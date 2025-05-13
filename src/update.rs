@@ -598,6 +598,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                             name: name.clone(),
                             theme,
                             size,
+                            bg_color: state.area.bg_color,
                             screens: (0..size.0)
                                 .cartesian_product(0..size.1)
                                 .map(|(x, y)| Screen {
@@ -617,21 +618,21 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                 _ => {}
             }
         }
-        Message::RenameAreaDialogue => {
-            state.dialogue = Some(Dialogue::RenameArea {
+        Message::EditAreaDialogue => {
+            state.dialogue = Some(Dialogue::EditArea {
                 name: state.area.name.clone(),
             });
-            return Ok(iced::widget::text_input::focus("RenameArea"));
+            return Ok(iced::widget::text_input::focus("EditArea"));
         }
-        Message::SetRenameAreaName(new_name) => match &mut state.dialogue {
-            Some(Dialogue::RenameArea { name }) => {
+        Message::SetEditAreaName(new_name) => match &mut state.dialogue {
+            Some(Dialogue::EditArea { name }) => {
                 *name = new_name.clone();
             }
             _ => {}
         },
-        Message::RenameArea => {
+        Message::EditArea => {
             match &state.dialogue {
-                Some(Dialogue::RenameArea { name }) => {
+                Some(Dialogue::EditArea { name }) => {
                     if name.len() == 0 {
                         warn!("Empty area name is invalid.");
                         return Ok(Task::none());
@@ -644,13 +645,24 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                             return Ok(Task::none());
                         }
                     }
-                    rename_area(state, &name)?;
-                    load_area_list(state)?;
-                    state.area.name = name.clone();
+                    if name != state.area.name {
+                        rename_area(state, &name)?;
+                        load_area_list(state)?;
+                        state.area.name = name.clone();
+                    }
                     state.dialogue = None;
                 }
                 _ => {}
             }
+        }
+        &Message::EditAreaBGRed(c) => {
+            state.area.bg_color.0 = c;
+        }
+        &Message::EditAreaBGGreen(c) => {
+            state.area.bg_color.1 = c;
+        }
+        &Message::EditAreaBGBlue(c) => {
+            state.area.bg_color.2 = c;
         }
         Message::DeleteAreaDialogue => {
             state.dialogue = Some(Dialogue::DeleteArea);

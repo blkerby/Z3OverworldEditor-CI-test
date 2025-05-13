@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     persist::{load_project, save_area, save_project},
-    state::{Area, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile},
+    state::{Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile},
     update::update_palette_order,
 };
 
@@ -750,6 +750,11 @@ impl<'a> Importer<'a> {
                 .copy_from_slice(&((animated_gfx * 64)..(animated_gfx * 64 + 32)).collect_vec());
 
             let pal = &self.map_palettes[parent];
+            let bg_color = match parent {
+                0x40..0x80 => (18, 17, 10),       // dark world
+                0x80 | 0x82 | 0x83 => (6, 14, 6), // dark green background (Special World)
+                _ => (9, 19, 9),                  // default green background
+            };
             let mut area: Area = Area {
                 modified: true,
                 name: match world_idx {
@@ -759,6 +764,7 @@ impl<'a> Importer<'a> {
                     _ => bail!("unexpected world_idx: {}", world_idx),
                 },
                 theme: "Base".to_string(),
+                bg_color,
                 size: (size.0 * 2, size.1 * 2),
                 screens: vec![],
             };
