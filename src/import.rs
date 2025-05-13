@@ -434,14 +434,7 @@ impl<'a> Importer<'a> {
             name: name.to_string(),
             id,
             colors,
-            tiles: vec![
-                Tile {
-                    priority: false,
-                    collision: 0,
-                    pixels: [[0; 8]; 8],
-                };
-                16
-            ],
+            tiles: vec![Tile::default(); 16],
         });
         Ok(())
     }
@@ -754,6 +747,8 @@ impl<'a> Importer<'a> {
         let mut tile_lookup: Vec<HashMap<Tile, (usize, Flip)>> =
             vec![HashMap::new(); self.state.palettes.len()];
         let mut used_tiles: Vec<Vec<Tile>> = vec![vec![]; self.state.palettes.len()];
+        let mut h_flippable: Vec<Vec<bool>> = vec![vec![]; self.state.palettes.len()];
+        let mut v_flippable: Vec<Vec<bool>> = vec![vec![]; self.state.palettes.len()];
 
         for parent in 0..=0x81 {
             if self.map_parents[parent] as usize != parent {
@@ -858,6 +853,8 @@ impl<'a> Importer<'a> {
                                         t8.flip.apply_to_pixels(self.tiles8[tiles8_idx as usize]);
                                     let tile = Tile {
                                         priority: t8.priority,
+                                        h_flippable: false,
+                                        v_flippable: false,
                                         collision,
                                         pixels,
                                     };
@@ -867,6 +864,8 @@ impl<'a> Importer<'a> {
                                         None => {
                                             let idx = used_tiles[palette_idx].len();
                                             used_tiles[palette_idx].push(tile);
+                                            h_flippable[palette_idx].push(false);
+                                            v_flippable[palette_idx].push(false);
                                             for flip in [
                                                 Flip::None,
                                                 Flip::Horizontal,
@@ -879,6 +878,20 @@ impl<'a> Importer<'a> {
                                             (idx, Flip::None)
                                         }
                                     };
+
+                                    match flip {
+                                        Flip::None => {}
+                                        Flip::Horizontal => {
+                                            h_flippable[palette_idx][tile_idx] = true;
+                                        }
+                                        Flip::Vertical => {
+                                            v_flippable[palette_idx][tile_idx] = true;
+                                        }
+                                        Flip::Both => {
+                                            h_flippable[palette_idx][tile_idx] = true;
+                                            v_flippable[palette_idx][tile_idx] = true;
+                                        }
+                                    }
 
                                     area.set_tile(x as u16, y as u16, tile_idx as u16);
                                     area.set_palette(x as u16, y as u16, pal_id);
@@ -905,6 +918,10 @@ impl<'a> Importer<'a> {
             save_area(self.state)?;
         }
         for i in 0..self.state.palettes.len() {
+            for j in 0..used_tiles[i].len() {
+                used_tiles[i][j].h_flippable = h_flippable[i][j];
+                used_tiles[i][j].v_flippable = v_flippable[i][j];
+            }
             let n = used_tiles[i].len();
             used_tiles[i].resize((n + 15) / 16 * 16, Tile::default());
             self.state.palettes[i].tiles = used_tiles[i].clone();

@@ -1,11 +1,9 @@
 Some features still needed:
-- during ROM import, show progress bar or something, to prevent clicking multiple times.
-- Include reflectability data
-- overlays
 - export PNG
 - Swap tiles (within and between palettes), updating area data
 - Undo
 - Way to open a second area/scratch in side panel (instead of palette/tileset editor)
+- overlays
 - World editor
 - Export to ROM
 - add status bar to show cursor position & tile info? (e.g. palette, tile number, collision type, flip)

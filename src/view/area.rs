@@ -236,6 +236,12 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         let cb = &color_bytes[palette_idx];
                         let mut tile_addr = screen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
 
+                        let illegal_flip = match flip {
+                            crate::state::Flip::None => false,
+                            crate::state::Flip::Horizontal => !tile.h_flippable,
+                            crate::state::Flip::Vertical => !tile.v_flippable,
+                            crate::state::Flip::Both => !tile.h_flippable || !tile.v_flippable,
+                        };
                         let identify_tile = self.identify_tile
                             && self.palette_idx == palette_idx
                             && self.tile_idx == Some(tile_idx);
@@ -247,6 +253,13 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                                 let identify_color = self.identify_color
                                     && self.color_idx == Some(color_idx)
                                     && self.palette_idx == palette_idx;
+
+                                if illegal_flip && !self.identify_tile && !self.identify_color {
+                                    let red_highlight = [255, 0, 0];
+                                    let alpha = 0.5;
+                                    color = alpha_blend(color, red_highlight, alpha);
+                                }
+
                                 let pink_highlight = [255, 105, 180];
                                 if identify_tile {
                                     let alpha = 0.5;

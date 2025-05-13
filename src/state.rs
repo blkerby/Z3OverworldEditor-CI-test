@@ -21,6 +21,8 @@ pub type ColorRGB = [ColorValue; 3];
 pub struct Tile {
     pub priority: bool,
     pub collision: CollisionType,
+    pub h_flippable: bool,
+    pub v_flippable: bool,
     pub pixels: [[ColorIdx; 8]; 8],
 }
 
@@ -310,6 +312,8 @@ pub fn ensure_palettes_non_empty(state: &mut EditorState) {
             Tile {
                 priority: false,
                 collision: 0,
+                h_flippable: true,
+                v_flippable: true,
                 pixels: [[0; 8]; 8]
             };
             16

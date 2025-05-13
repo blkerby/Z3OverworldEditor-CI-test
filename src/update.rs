@@ -597,6 +597,30 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
             state.palettes[pal_idx].tiles[tile_idx as usize].collision = collision;
             state.palettes[pal_idx].modified = true;
         }
+        &Message::SetTileHFlippable {
+            palette_id,
+            tile_idx,
+            h_flippable,
+        } => {
+            let pal_idx = *state
+                .palettes_id_idx_map
+                .get(&palette_id)
+                .context("undefined palette")?;
+            state.palettes[pal_idx].tiles[tile_idx as usize].h_flippable = h_flippable;
+            state.palettes[pal_idx].modified = true;
+        }
+        &Message::SetTileVFlippable {
+            palette_id,
+            tile_idx,
+            v_flippable,
+        } => {
+            let pal_idx = *state
+                .palettes_id_idx_map
+                .get(&palette_id)
+                .context("undefined palette")?;
+            state.palettes[pal_idx].tiles[tile_idx as usize].v_flippable = v_flippable;
+            state.palettes[pal_idx].modified = true;
+        }
         Message::TilesetBrush(Point { x: x0, y: y0 }) => {
             let s = &state.selected_tile_block;
             for y in 0..s.size.1 {

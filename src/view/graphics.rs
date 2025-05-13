@@ -3,7 +3,7 @@ use iced::{
     alignment::Vertical,
     mouse,
     widget::{canvas, checkbox, column, horizontal_space, pick_list, row, text, Column},
-    Element, Size,
+    Element, Padding, Size,
 };
 use iced_aw::number_input;
 
@@ -201,9 +201,37 @@ pub fn graphics_view(state: &EditorState) -> Element<Message> {
                     .width(60),
                 ]
                 .align_y(Vertical::Center),
+                row![
+                    text("H-flippable").width(label_width),
+                    pick_list(
+                        ["No", "Yes"],
+                        Some(if tile.h_flippable { "Yes" } else { "No" }),
+                        move |x| Message::SetTileHFlippable {
+                            palette_id: pal_id,
+                            tile_idx: idx,
+                            h_flippable: x == "Yes"
+                        }
+                    )
+                    .text_size(12)
+                ]
+                .align_y(Vertical::Center),
+                row![
+                    text("V-flippable").width(label_width),
+                    pick_list(
+                        ["No", "Yes"],
+                        Some(if tile.v_flippable { "Yes" } else { "No" }),
+                        move |x| Message::SetTileVFlippable {
+                            palette_id: pal_id,
+                            tile_idx: idx,
+                            v_flippable: x == "Yes"
+                        }
+                    )
+                    .text_size(12)
+                ]
+                .align_y(Vertical::Center),
             ]
-            .spacing(15)
-            .padding(10),
+            .spacing(12)
+            .padding([5, 15]),
             horizontal_space(),
             canvas(GraphicsBox {
                 colors: pal.colors,

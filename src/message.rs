@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use iced::Point;
 
-use crate::state::{CollisionType, ColorIdx, ColorValue, Flip, Focus, PaletteId, PixelCoord, TileCoord, TileIdx};
+use crate::state::{
+    CollisionType, ColorIdx, ColorValue, Flip, Focus, PaletteId, PixelCoord, TileCoord, TileIdx,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SelectionSource {
@@ -52,6 +54,16 @@ pub enum Message {
         palette_id: PaletteId,
         tile_idx: TileIdx,
         collision: CollisionType,
+    },
+    SetTileHFlippable {
+        palette_id: PaletteId,
+        tile_idx: TileIdx,
+        h_flippable: bool,
+    },
+    SetTileVFlippable {
+        palette_id: PaletteId,
+        tile_idx: TileIdx,
+        v_flippable: bool,
     },
     TilesetBrush(Point<TileCoord>),
     SelectPixel(PixelCoord, PixelCoord),
