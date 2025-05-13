@@ -72,10 +72,17 @@ impl canvas::Program<Message> for GraphicsBox {
             if x < 0 || x >= 8 || y < 0 || y >= 8 {
                 return (canvas::event::Status::Ignored, None);
             }
-            (
-                canvas::event::Status::Captured,
-                Some(Message::ClickPixel(x as PixelCoord, y as PixelCoord)),
-            )
+            if self.brush_mode {
+                (
+                    canvas::event::Status::Captured,
+                    Some(Message::BrushPixel(x as PixelCoord, y as PixelCoord)),
+                )
+            } else {
+                (
+                    canvas::event::Status::Captured,
+                    Some(Message::SelectPixel(x as PixelCoord, y as PixelCoord)),
+                )
+            }
         } else {
             (canvas::event::Status::Ignored, None)
         }

@@ -96,7 +96,11 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                         }
                     }
                     Focus::GraphicsPixel => {
-                        // TODO: Handle making selections with keyboard:
+                        if let Some(coords) = state.pixel_coords {
+                            if coords.0 < 7 {
+                                return Ok(Task::done(Message::SelectPixel(coords.0 + 1, coords.1)));
+                            }
+                        }
                     }
                     Focus::TilesetTile => {
                         if let Some(idx) = state.tile_idx {
@@ -131,7 +135,11 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                         }
                     }
                     Focus::GraphicsPixel => {
-                        // TODO: Handle making selections with keyboard:
+                        if let Some(coords) = state.pixel_coords {
+                            if coords.0 > 0 {
+                                return Ok(Task::done(Message::SelectPixel(coords.0 - 1, coords.1)));
+                            }
+                        }
                     }
                     Focus::TilesetTile => {
                         if let Some(idx) = state.tile_idx {
@@ -180,7 +188,11 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     }
                     Focus::PaletteColor => {}
                     Focus::GraphicsPixel => {
-                        // TODO: Handle making selections with keyboard:
+                        if let Some(coords) = state.pixel_coords {
+                            if coords.1 < 7 {
+                                return Ok(Task::done(Message::SelectPixel(coords.0, coords.1 + 1)));
+                            }
+                        }
                     }
                     Focus::TilesetTile => {
                         if let Some(idx) = state.tile_idx {
@@ -229,7 +241,11 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     }
                     Focus::PaletteColor => {}
                     Focus::GraphicsPixel => {
-                        // TODO: Handle making selections with keyboard:
+                        if let Some(coords) = state.pixel_coords {
+                            if coords.1 > 0 {
+                                return Ok(Task::done(Message::SelectPixel(coords.0, coords.1 - 1)));
+                            }
+                        }
                     }
                     Focus::TilesetTile => {
                         if let Some(idx) = state.tile_idx {
@@ -577,21 +593,23 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
             }
             state.palettes[state.palette_idx].modified = true;
         }
-        &Message::ClickPixel(x, y) => {
-            // This is silly. TODO: Split this into two message variants.
+        &Message::SelectPixel(x, y) => {
             state.pixel_coords = Some((x, y));
             if let Some(tile_idx) = state.tile_idx {
                 let pal = &mut state.palettes[state.palette_idx];
-                if state.brush_mode {
-                    if let Some(color_idx) = state.color_idx {
-                        pal.tiles[tile_idx as usize].pixels[y as usize][x as usize] = color_idx;
-                        pal.modified = true;
-                    }
-                } else {
-                    let color_idx = pal.tiles[tile_idx as usize].pixels[y as usize][x as usize];
-                    state.color_idx = Some(color_idx);
-                    state.selected_color = pal.colors[color_idx as usize];
-                    state.focus = Focus::GraphicsPixel;
+                let color_idx = pal.tiles[tile_idx as usize].pixels[y as usize][x as usize];
+                state.color_idx = Some(color_idx);
+                state.selected_color = pal.colors[color_idx as usize];
+                state.focus = Focus::GraphicsPixel;
+            }
+        }
+        &Message::BrushPixel(x, y) => {
+            state.pixel_coords = Some((x, y));
+            if let Some(tile_idx) = state.tile_idx {
+                let pal = &mut state.palettes[state.palette_idx];
+                if let Some(color_idx) = state.color_idx {
+                    pal.tiles[tile_idx as usize].pixels[y as usize][x as usize] = color_idx;
+                    pal.modified = true;
                 }
             }
         }
