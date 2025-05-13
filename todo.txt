@@ -1,7 +1,7 @@
 Some features still needed:
 
 - during ROM import, show progress bar or something, to prevent clicking multiple times.
-- Include collision & reflectability data
+- Include reflectability data
 - overlays
 - export PNG
 - Swap tiles (within and between palettes), updating area data

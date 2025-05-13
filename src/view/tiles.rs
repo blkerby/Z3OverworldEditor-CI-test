@@ -12,7 +12,8 @@ use log::info;
 
 use crate::{
     message::{Message, SelectionSource},
-    state::{EditorState, Palette, TileCoord, TileIdx},
+    state::{ColorIdx, EditorState, Palette, TileCoord, TileIdx},
+    view::helpers::alpha_blend,
 };
 
 // We use two separate canvases: one for drawing the tile raster and one for the tile selection.
@@ -25,6 +26,8 @@ struct TileGrid<'a> {
     end_coords: Option<(TileCoord, TileCoord)>,
     thickness: f32,
     brush_mode: bool,
+    identify_color: bool,
+    color_idx: Option<ColorIdx>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -175,11 +178,11 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
         fn scale_color(c: u8) -> u8 {
             ((c as u16) * 255 / 31) as u8
         }
-        let color_bytes: Vec<[u8; 4]> = self
+        let color_bytes: Vec<[u8; 3]> = self
             .palette
             .colors
             .iter()
-            .map(|&[r, g, b]| [scale_color(r), scale_color(g), scale_color(b), 255])
+            .map(|&[r, g, b]| [scale_color(r), scale_color(g), scale_color(b)])
             .collect();
 
         let tiles = &self.palette.tiles;
@@ -194,56 +197,23 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                 let tile_y = y / 8;
                 let pixel_x = x % 8;
                 let pixel_y = y % 8;
-                let i = tile_y * num_cols + tile_x;
-                if i >= tiles.len() {
+                let tile_idx = tile_y * num_cols + tile_x;
+                if tile_idx >= tiles.len() {
                     data.extend([0, 0, 0, 0]);
                     continue;
                 }
-                let tile = &self.palette.tiles[i];
+                let tile = &self.palette.tiles[tile_idx];
                 let color_idx = tile.pixels[pixel_y][pixel_x];
-                data.extend(color_bytes[color_idx as usize]);
+                let mut color = color_bytes[color_idx as usize];
+                if self.identify_color && self.color_idx == Some(color_idx) {
+                    let alpha = 0.5;
+                    let pink_highlight = [255, 105, 180];
+                    color = alpha_blend(color, pink_highlight, alpha);
+                }
+                data.extend(&color);
+                data.push(255); // alpha channel
             }
         }
-
-        // if self.brush_mode {
-        //     // Overlay the block to be pasted/brushed onto the area:
-        //     if let Some(Point { x: base_x, y: base_y }) = state.coords {
-        //         let base_addr =
-        //             (base_y * 8 + 1) as usize * row_stride + (base_x * 8 + 1) as usize * col_stride;
-        //         let alpha = 0.75;
-        //         let gamma = 2.2;
-        //         for ty in 0..self.tile_block.size.1 as usize {
-        //             for tx in 0..self.tile_block.size.0 as usize {
-        //                 let palette_id = self.tile_block.palettes[ty][tx];
-        //                 if let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) {
-        //                     let tile_idx = self.tile_block.tiles[ty][tx];
-        //                     let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
-        //                     let cb = &color_bytes[palette_idx];
-        //                     let mut tile_addr =
-        //                         base_addr + ty * 8 * row_stride + tx * 8 * col_stride;
-        //                     for py in 0..8 {
-        //                         let mut addr = tile_addr;
-        //                         for px in 0..8 {
-        //                             let color_idx = tile[py][px];
-        //                             for k in 0..3 {
-        //                                 let old_color_val = data[addr + k] as f32;
-        //                                 let new_color_val = cb[color_idx as usize][k] as f32;
-        //                                 let blended_color_val = f32::powf(
-        //                                     (1.0 - alpha) * f32::powf(old_color_val, gamma)
-        //                                         + alpha * f32::powf(new_color_val, gamma),
-        //                                     1.0 / gamma,
-        //                                 );
-        //                                 data[addr + k] = blended_color_val as u8;
-        //                             }
-        //                             addr += 4;
-        //                         }
-        //                         tile_addr += row_stride;
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
 
         let image = iced::advanced::image::Image::new(iced::advanced::image::Handle::from_rgba(
             (num_cols * 8) as u32,
@@ -396,6 +366,8 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
                     end_coords: state.end_coords,
                     thickness: 1.0,
                     brush_mode: state.brush_mode,
+                    identify_color: state.identify_color,
+                    color_idx: state.color_idx,
                 })
                 .width(384 + 4)
                 .height((num_rows * 8 * pixel_size + 4) as f32),

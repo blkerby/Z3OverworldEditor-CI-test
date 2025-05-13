@@ -16,8 +16,8 @@ use log::info;
 use crate::{
     message::{Message, SelectionSource},
     state::{
-        scale_color, Area, ColorRGB, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord,
-        TileIdx,
+        scale_color, Area, ColorIdx, ColorRGB, EditorState, Focus, Palette, PaletteId, TileBlock,
+        TileCoord, TileIdx,
     },
     view::helpers::alpha_blend,
 };
@@ -40,6 +40,8 @@ struct AreaGrid<'a> {
     identify_tile: bool,
     palette_idx: usize,
     tile_idx: Option<TileIdx>,
+    identify_color: bool,
+    color_idx: Option<ColorIdx>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -234,7 +236,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         let cb = &color_bytes[palette_idx];
                         let mut tile_addr = screen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
 
-                        let identify = self.identify_tile
+                        let identify_tile = self.identify_tile
                             && self.palette_idx == palette_idx
                             && self.tile_idx == Some(tile_idx);
                         for py in 0..8 {
@@ -242,7 +244,9 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                             for px in 0..8 {
                                 let color_idx = tile.pixels[py][px];
                                 let mut color = cb[color_idx as usize];
-                                if identify {
+                                let identify_color =
+                                    self.identify_color && self.color_idx == Some(color_idx);
+                                if identify_tile || identify_color {
                                     let alpha = 0.5;
                                     let pink_highlight = [255, 105, 180];
                                     color = alpha_blend(color, pink_highlight, alpha);
@@ -443,6 +447,8 @@ pub fn area_grid_view(state: &EditorState) -> Element<Message> {
                 identify_tile: state.identify_tile,
                 palette_idx: state.palette_idx,
                 tile_idx: state.tile_idx,
+                identify_color: state.identify_color,
+                color_idx: state.color_idx,
             })
             .width((num_cols as f32 * 8.0 + 2.0) * pixel_size)
             .height((num_rows as f32 * 8.0 + 2.0) * pixel_size),

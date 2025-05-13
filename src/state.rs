@@ -242,6 +242,7 @@ pub struct EditorState {
     pub palette_idx: usize,
     pub color_idx: Option<ColorIdx>,
     pub selected_color: ColorRGB,
+    pub identify_color: bool,
 
     // Tile editing state:
     pub tile_idx: Option<TileIdx>,
@@ -334,6 +335,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         palette_idx: 0,
         color_idx: None,
         selected_color: [0, 0, 0],
+        identify_color: false,
         tile_idx: None,
         selected_tile: Tile::default(),
         identify_tile: false,

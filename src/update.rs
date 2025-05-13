@@ -10,7 +10,7 @@ use crate::{
     message::{Message, SelectionSource},
     persist::{
         self, copy_area_theme, delete_area, delete_area_theme, delete_palette, load_area,
-        load_area_list, load_project, rename_area, rename_area_theme, save_area,
+        load_area_list, rename_area, rename_area_theme, save_area,
     },
     state::{
         Area, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile, TileBlock, TileCoord,
@@ -48,22 +48,19 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     return Ok(widget::focus_next());
                 }
             }
-            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-                match state.focus {
-                    Focus::None => {},
-                    Focus::MainPickArea => {},
-                    Focus::MainPickTheme => {},
-                    Focus::MainArea => {},
-                    Focus::PickPalette => {},
-                    Focus::PaletteColor => {
-                        // TODO: handle this
-                    }
-                    Focus::GraphicsPixel => {}
-                    Focus::TilesetTile => {
-                        state.identify_tile = modifiers.control();
-                    }
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.focus {
+                Focus::None => {}
+                Focus::MainPickArea => {}
+                Focus::MainPickTheme => {}
+                Focus::MainArea => {}
+                Focus::PickPalette => {}
+                Focus::PaletteColor | Focus::GraphicsPixel => {
+                    state.identify_color = modifiers.control();
                 }
-            }
+                Focus::TilesetTile => {
+                    state.identify_tile = modifiers.control();
+                }
+            },
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(key::Named::Escape),
                 ..
