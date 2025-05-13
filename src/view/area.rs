@@ -232,7 +232,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         for py in 0..8 {
                             let mut addr = tile_addr;
                             for px in 0..8 {
-                                let color_idx = tile[py][px];
+                                let color_idx = tile.pixels[py][px];
                                 data[addr..(addr + 4)].copy_from_slice(&cb[color_idx as usize]);
                                 addr += 4;
                             }
@@ -268,7 +268,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                             for py in 0..8 {
                                 let mut addr = tile_addr;
                                 for px in 0..8 {
-                                    let color_idx = tile[py][px];
+                                    let color_idx = tile.pixels[py][px];
                                     for k in 0..3 {
                                         let old_color_val = data[addr + k] as f32;
                                         let new_color_val = cb[color_idx as usize][k] as f32;

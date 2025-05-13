@@ -200,7 +200,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                     continue;
                 }
                 let tile = &self.palette.tiles[i];
-                let color_idx = tile[pixel_y][pixel_x];
+                let color_idx = tile.pixels[pixel_y][pixel_x];
                 data.extend(color_bytes[color_idx as usize]);
             }
         }

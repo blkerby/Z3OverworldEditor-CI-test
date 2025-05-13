@@ -91,7 +91,7 @@ impl canvas::Program<Message> for GraphicsBox {
 
         for y in 0..8 {
             for x in 0..8 {
-                let color_idx = self.tile[y][x];
+                let color_idx = self.tile.pixels[y][x];
                 let color = self.colors[color_idx as usize];
                 let r = color.0 as f32 / 31.0;
                 let g = color.1 as f32 / 31.0;

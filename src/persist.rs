@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use hashbrown::HashMap;
 use json_pretty_compact::PrettyCompactFormatter;
 use log::info;
 use serde::{de::DeserializeOwned, Serialize};
@@ -12,7 +13,7 @@ use serde_json::Serializer;
 use crate::{
     state::{
         ensure_areas_non_empty, ensure_palettes_non_empty, ensure_themes_non_empty, EditorState,
-        Palette,
+        Palette, PaletteId, TileIdx,
     },
     update::update_palette_order,
 };
@@ -142,8 +143,8 @@ pub fn load_area(state: &mut EditorState, name: &str, theme: &str) -> Result<()>
 }
 
 pub fn save_area(state: &mut EditorState) -> Result<()> {
-    let area_dir = get_area_dir(state)?;
     if state.area.modified {
+        let area_dir = get_area_dir(state)?;
         let area_filename = format!("{}.json", state.area.theme);
         let area_path = area_dir.join(&state.area.name).join(area_filename);
         save_json(&area_path, &state.area)?;
@@ -212,6 +213,32 @@ pub fn delete_area_theme(state: &mut EditorState, area_name: &str, theme: &str) 
     let area_path = area_dir.join(format!("{}.json", theme));
     info!("Deleting {}", area_path.display());
     std::fs::remove_file(area_path)?;
+    Ok(())
+}
+
+pub fn remap_tiles(
+    state: &mut EditorState,
+    map: &HashMap<(PaletteId, TileIdx), (PaletteId, TileIdx)>,
+) -> Result<()> {
+    let area_names = state.area_names.clone();
+    let theme_names = state.theme_names.clone();
+    for area_name in &area_names {
+        for theme_name in &theme_names {
+            load_area(state, area_name, theme_name)?;
+            for y in 0..state.area.size.1 as u16 * 32 {
+                for x in 0..state.area.size.0 as u16 * 32 {
+                    let pal = state.area.get_palette(x, y);
+                    let tile_idx = state.area.get_tile(x, y);
+                    if let Some(&(p1, t1)) = map.get(&(pal, tile_idx)) {
+                        state.area.set_palette(x, y, p1);
+                        state.area.set_tile(x, y, t1);
+                        state.area.modified = true;
+                    }
+                }
+            }
+            save_area(state)?;
+        }
+    }
     Ok(())
 }
 

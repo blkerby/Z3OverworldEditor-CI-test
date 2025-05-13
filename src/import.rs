@@ -1,4 +1,5 @@
 use anyhow::{bail, ensure, Context, Result};
+use hashbrown::HashMap;
 use itertools::Itertools;
 use log::{info, warn};
 use std::{
@@ -8,8 +9,10 @@ use std::{
 };
 
 use crate::{
-    persist::{load_project, save_area, save_project},
-    state::{Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile},
+    persist::{delete_palette, load_project, remap_tiles, save_area, save_project},
+    state::{
+        Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile, TileIdx,
+    },
     update::update_palette_order,
 };
 
@@ -111,6 +114,7 @@ struct Constants {
     local_gfx_set_addr: SnesAddr,
     map_gfx_set_addr: SnesAddr,
     special_gfx_set_addr: SnesAddr,
+    tile_types: SnesAddr,
 }
 
 impl Constants {
@@ -140,6 +144,7 @@ impl Constants {
             local_gfx_set_addr: SnesAddr(0x00DDD7),
             map_gfx_set_addr: SnesAddr(0x00FC9C),
             special_gfx_set_addr: SnesAddr(0x02E585), // appears incorrect in ZS?
+            tile_types: SnesAddr(0x0FFD94),
         }
     }
 
@@ -169,6 +174,7 @@ impl Constants {
             local_gfx_set_addr: SnesAddr(0x0DD97),
             map_gfx_set_addr: SnesAddr(0x00FC9C),
             special_gfx_set_addr: SnesAddr(0x02E821),
+            tile_types: SnesAddr(0x0E9459),
         }
     }
 
@@ -251,6 +257,7 @@ pub struct Importer<'a> {
     map_parents: Vec<MapIdx>,
     map_palettes: Vec<MapPalettes>,
     map_gfx: Vec<[u8; 8]>,
+    tile_types: Vec<u8>,
 }
 
 impl Rom {
@@ -382,11 +389,13 @@ impl<'a> Importer<'a> {
             map_parents: vec![],
             map_palettes: vec![],
             map_gfx: vec![],
+            tile_types: vec![],
         })
     }
 
     fn import_all(&mut self) -> Result<()> {
         let starting_palette_id = 100;
+        self.load_tile_types()?;
         self.import_all_palettes(starting_palette_id)?;
         self.load_graphics()?;
         self.load_16x16_tiles()?;
@@ -396,6 +405,8 @@ impl<'a> Importer<'a> {
         self.load_map_palettes()?;
         self.load_map_gfx()?;
         self.load_areas()?;
+        self.prune_tiles()?;
+        self.prune_palettes()?;
         save_project(self.state)?;
         load_project(self.state)?;
         Ok(())
@@ -421,7 +432,13 @@ impl<'a> Importer<'a> {
             name: name.to_string(),
             id,
             colors,
-            tiles: vec![[[0; 8]; 8]; 16],
+            tiles: vec![
+                Tile {
+                    collision: None,
+                    pixels: [[0; 8]; 8],
+                };
+                16
+            ],
         });
         Ok(())
     }
@@ -499,7 +516,15 @@ impl<'a> Importer<'a> {
         }
 
         for p in &mut self.state.palettes {
-            p.tiles = self.tiles8.clone();
+            p.tiles = self
+                .tiles8
+                .iter()
+                .cloned()
+                .map(|t| Tile {
+                    collision: None,
+                    pixels: t,
+                })
+                .collect();
             p.modified = true;
         }
         Ok(())
@@ -722,9 +747,19 @@ impl<'a> Importer<'a> {
         Ok(())
     }
 
+    fn load_tile_types(&mut self) -> Result<()> {
+        self.tile_types = self
+            .rom
+            .read_n(self.constants.tile_types.into(), 512)?
+            .to_owned();
+        Ok(())
+    }
+
     fn load_areas(&mut self) -> Result<()> {
         let tile32_offsets = [(0, 0), (2, 0), (0, 2), (2, 2)];
         let tile16_offsets = [(0, 0), (1, 0), (0, 1), (1, 1)];
+        self.state.theme_names = vec!["Base".to_string()];
+        self.state.area_names.clear();
         for parent in 0..0xA0 {
             if self.map_parents[parent] as usize != parent {
                 continue;
@@ -768,6 +803,7 @@ impl<'a> Importer<'a> {
                 size: (size.0 * 2, size.1 * 2),
                 screens: vec![],
             };
+            self.state.area_names.push(area.name.clone());
             for y in 0..size.1 * 2 {
                 for x in 0..size.0 * 2 {
                     area.screens.push(Screen {
@@ -803,7 +839,7 @@ impl<'a> Importer<'a> {
                                     let gfx_sheet = t8.gfx_char / 64;
                                     ensure!(gfx_sheet < 8);
                                     let pal_high = [0, 3, 4, 5].contains(&gfx_sheet);
-                                    let pal_idx = match (t8.pal_idx, pal_high) {
+                                    let pal_id = match (t8.pal_idx, pal_high) {
                                         (p @ (0 | 1), _) => self.hud_palette_ids[0][p as usize],
                                         (p @ 2..=6, false) => {
                                             self.main_palette_ids[pal.main as usize][p as usize - 2]
@@ -821,8 +857,24 @@ impl<'a> Importer<'a> {
                                             bail!("unexpected palette: {} {}", t8.pal_idx, pal_high)
                                         }
                                     };
+                                    let palette_idx = self.state.palettes_id_idx_map[&pal_id];
+                                    let collision = self.tile_types[t8.gfx_char as usize] as u16;
+                                    if let Some(c) = self.state.palettes[palette_idx].tiles
+                                        [tile_idx as usize]
+                                        .collision
+                                    {
+                                        if c != collision {
+                                            // Use invalid collision value 256 as a marker for ambiguous
+                                            self.state.palettes[palette_idx].tiles
+                                                [tile_idx as usize]
+                                                .collision = Some(256);
+                                        }
+                                    } else {
+                                        self.state.palettes[palette_idx].tiles[tile_idx as usize]
+                                            .collision = Some(collision);
+                                    }
                                     area.set_tile(x as u16, y as u16, tile_idx);
-                                    area.set_palette(x as u16, y as u16, pal_idx);
+                                    area.set_palette(x as u16, y as u16, pal_id);
                                     area.set_flip(x as u16, y as u16, t8.flip);
                                 }
                             }
@@ -833,6 +885,42 @@ impl<'a> Importer<'a> {
             self.state.area = area;
             save_area(self.state)?;
         }
+        Ok(())
+    }
+
+    fn prune_tiles(&mut self) -> Result<()> {
+        let mut map: HashMap<(PaletteId, TileIdx), (PaletteId, TileIdx)> = HashMap::new();
+        for pal_idx in 0..self.state.palettes.len() {
+            let pal_id = self.state.palettes[pal_idx].id;
+            let mut new_tiles: Vec<Tile> = vec![];
+            for tile_idx in 0..self.state.palettes[pal_idx].tiles.len() {
+                if self.state.palettes[pal_idx].tiles[tile_idx]
+                    .collision
+                    .is_some()
+                {
+                    map.insert(
+                        (pal_id, tile_idx as TileIdx),
+                        (pal_id, new_tiles.len() as TileIdx),
+                    );
+                    new_tiles.push(self.state.palettes[pal_idx].tiles[tile_idx]);
+                }
+            }
+            new_tiles.resize((new_tiles.len() + 15) / 16 * 16, Tile::default());
+            self.state.palettes[pal_idx].tiles = new_tiles;
+            self.state.palettes[pal_idx].modified = true;
+        }
+        remap_tiles(self.state, &map)?;
+        Ok(())
+    }
+
+    fn prune_palettes(&mut self) -> Result<()> {
+        let mut new_palettes = vec![];
+        for pal_idx in 0..self.state.palettes.len() {
+            if self.state.palettes[pal_idx].tiles.len() > 0 {
+                new_palettes.push(self.state.palettes[pal_idx].clone());
+            }
+        }
+        self.state.palettes = new_palettes;
         Ok(())
     }
 }

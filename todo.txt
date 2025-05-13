@@ -9,3 +9,5 @@ Some features still needed:
 - Way to open a second area/scratch in side panel (instead of palette/tileset editor)
 - World editor
 - Export to ROM
+- add status bar to show cursor position & tile info? (e.g. palette, tile number, collision type, flip)
+  - right clicking can show most of this info, but for a broken palette it won't be available.

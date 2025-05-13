@@ -15,7 +15,12 @@ pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type TileCoord = u16; // Index into area: number of 8x8 tiles from top-left corner
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
-pub type Tile = [[ColorIdx; 8]; 8];
+
+#[derive(Copy, Clone, Serialize, Deserialize, Default, Debug)]
+pub struct Tile {
+    pub collision: Option<u16>,
+    pub pixels: [[ColorIdx; 8]; 8],
+}
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Palette {
@@ -73,22 +78,23 @@ impl Flip {
         }
     }
 
-    pub fn apply<T: Copy>(self, mut tile: [[T; 8]; 8]) -> [[T; 8]; 8] {
+    pub fn apply(self, mut tile: Tile) -> Tile {
+        // TODO: also apply flips to slope collisions
         match self {
             Flip::None => {}
             Flip::Horizontal => {
-                for row in tile.iter_mut() {
+                for row in tile.pixels.iter_mut() {
                     row.reverse();
                 }
             }
             Flip::Vertical => {
-                tile.reverse();
+                tile.pixels.reverse();
             }
             Flip::Both => {
-                for row in tile.iter_mut() {
+                for row in tile.pixels.iter_mut() {
                     row.reverse();
                 }
-                tile.reverse();
+                tile.pixels.reverse();
             }
         }
         tile
@@ -291,7 +297,13 @@ pub fn ensure_palettes_non_empty(state: &mut EditorState) {
         let mut pal = Palette::default();
         pal.modified = true;
         pal.name = "Default".to_string();
-        pal.tiles = vec![[[0; 8]; 8]; 16];
+        pal.tiles = vec![
+            Tile {
+                collision: None,
+                pixels: [[0; 8]; 8]
+            };
+            16
+        ];
         state.palettes.push(pal);
     }
 }
@@ -316,7 +328,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         selected_color: (0, 0, 0),
         tile_idx: None,
         flip: Flip::None,
-        selected_tile: [[0; 8]; 8],
+        selected_tile: Tile::default(),
         selection_source: SelectionSource::MainArea,
         start_coords: None,
         end_coords: None,

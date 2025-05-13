@@ -150,7 +150,11 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {
-                        // TODO: Handle making selections with keyboard:
+                        if state.palette_idx + 1 < state.palettes.len() {
+                            state.palette_idx += 1;
+                            state.color_idx = None;
+                            state.tile_idx = None;
+                        }
                     }
                     Focus::PaletteColor => {}
                     Focus::GraphicsPixel => {
@@ -195,7 +199,11 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {
-                        // TODO: Handle making selections with keyboard:
+                        if state.palette_idx > 0 {
+                            state.palette_idx -= 1;
+                            state.color_idx = None;
+                            state.tile_idx = None;
+                        }
                     }
                     Focus::PaletteColor => {}
                     Focus::GraphicsPixel => {
@@ -325,6 +333,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                 if name == &format!("{}: {}", state.palettes[i].id, state.palettes[i].name) {
                     state.palette_idx = i;
                     state.color_idx = None;
+                    state.tile_idx = None;
                     break;
                 }
             }
@@ -488,7 +497,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
         Message::AddTileRow => {
             state.palettes[state.palette_idx]
                 .tiles
-                .extend(vec![[[0; 8]; 8]; 16]);
+                .extend(vec![Tile::default(); 16]);
             state.palettes[state.palette_idx].modified = true;
         }
         Message::DeleteTileRow => {
@@ -499,7 +508,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
             let new_size = state.palettes[state.palette_idx].tiles.len() - 16;
             state.palettes[state.palette_idx]
                 .tiles
-                .resize(new_size, [[0; 8]; 8]);
+                .resize(new_size, Tile::default());
             if let Some(idx) = state.tile_idx {
                 if idx >= new_size as TileIdx {
                     state.tile_idx = Some(new_size as TileIdx - 1);
@@ -529,11 +538,11 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                 let pal = &mut state.palettes[state.palette_idx];
                 if state.brush_mode {
                     if let Some(color_idx) = state.color_idx {
-                        pal.tiles[tile_idx as usize][y as usize][x as usize] = color_idx;
+                        pal.tiles[tile_idx as usize].pixels[y as usize][x as usize] = color_idx;
                         pal.modified = true;
                     }
                 } else {
-                    let color_idx = pal.tiles[tile_idx as usize][y as usize][x as usize];
+                    let color_idx = pal.tiles[tile_idx as usize].pixels[y as usize][x as usize];
                     state.color_idx = Some(color_idx);
                     state.selected_color = pal.colors[color_idx as usize];
                     state.focus = Focus::GraphicsPixel;
@@ -870,7 +879,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     let tile = if let Some(&idx) = state.palettes_id_idx_map.get(&palette_id) {
                         state.palettes[idx as usize].tiles[tile_idx as usize]
                     } else {
-                        [[0; 8]; 8]
+                        Tile::default()
                     };
                     gfx_row.push(tile);
                 }
