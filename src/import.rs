@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    persist::{save_area, save_project},
+    persist::{load_project, save_area, save_project},
     state::{Area, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile},
     update::update_palette_order,
 };
@@ -397,6 +397,7 @@ impl<'a> Importer<'a> {
         self.load_map_gfx()?;
         self.load_areas()?;
         save_project(self.state)?;
+        load_project(self.state)?;
         Ok(())
     }
 

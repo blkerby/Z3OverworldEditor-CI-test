@@ -13,16 +13,17 @@ use crate::{
         load_area_list, load_project, rename_area, rename_area_theme, save_area,
     },
     state::{
-        Area, Dialogue, EditorState, Flip, PaletteId, Screen, Tile, TileBlock, TileCoord, TileIdx,
-        MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
+        Area, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile, TileBlock, TileCoord,
+        TileIdx, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
     },
     view::{open_project, open_rom},
 };
+use anyhow::{bail, Result};
 
-pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
+pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Message>> {
     if state.global_config.project_dir.is_none() {
         let Message::ProjectOpened(_) = &message else {
-            return Task::none();
+            return Ok(Task::none());
         };
     }
     match message {
@@ -33,9 +34,9 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 ..
             }) => {
                 if modifiers.shift() {
-                    return widget::focus_previous();
+                    return Ok(widget::focus_previous());
                 } else {
-                    return widget::focus_next();
+                    return Ok(widget::focus_next());
                 }
             }
             Event::Keyboard(keyboard::Event::KeyPressed {
@@ -54,17 +55,34 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 key: keyboard::Key::Named(key::Named::ArrowRight),
                 ..
             }) => {
-                if let Some(idx) = state.color_idx {
-                    if idx < 15 {
-                        let new_idx = idx + 1;
-                        state.color_idx = Some(new_idx);
-                        state.selected_color =
-                            state.palettes[state.palette_idx].colors[new_idx as usize];
+                match state.focus {
+                    Focus::None => {}
+                    Focus::MainPickArea => {}
+                    Focus::MainPickTheme => {}
+                    Focus::MainArea => {
+                        // TODO: Handle making selections with keyboard:
                     }
-                } else if let Some(idx) = state.tile_idx {
-                    if (idx as usize) + 1 < state.palettes[state.palette_idx].tiles.len() {
-                        let new_idx = idx + 1;
-                        state.tile_idx = Some(new_idx);
+                    Focus::PickPalette => {}
+                    Focus::PaletteColor => {
+                        if let Some(idx) = state.color_idx {
+                            if idx < 15 {
+                                let new_idx = idx + 1;
+                                state.color_idx = Some(new_idx);
+                                state.selected_color =
+                                    state.palettes[state.palette_idx].colors[new_idx as usize];
+                            }
+                        }
+                    }
+                    Focus::GraphicsPixel => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::TilesetTile => {
+                        if let Some(idx) = state.tile_idx {
+                            if (idx as usize) + 1 < state.palettes[state.palette_idx].tiles.len() {
+                                let new_idx = idx + 1;
+                                state.tile_idx = Some(new_idx);
+                            }
+                        }
                     }
                 }
             }
@@ -72,17 +90,34 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 key: keyboard::Key::Named(key::Named::ArrowLeft),
                 ..
             }) => {
-                if let Some(idx) = state.color_idx {
-                    if idx > 0 {
-                        let new_idx = idx - 1;
-                        state.color_idx = Some(new_idx);
-                        state.selected_color =
-                            state.palettes[state.palette_idx].colors[new_idx as usize];
+                match state.focus {
+                    Focus::None => {}
+                    Focus::MainPickArea => {}
+                    Focus::MainPickTheme => {}
+                    Focus::MainArea => {
+                        // TODO: Handle making selections with keyboard:
                     }
-                } else if let Some(idx) = state.tile_idx {
-                    if idx > 0 {
-                        let new_idx = idx - 1;
-                        state.tile_idx = Some(new_idx);
+                    Focus::PickPalette => {}
+                    Focus::PaletteColor => {
+                        if let Some(idx) = state.color_idx {
+                            if idx > 0 {
+                                let new_idx = idx - 1;
+                                state.color_idx = Some(new_idx);
+                                state.selected_color =
+                                    state.palettes[state.palette_idx].colors[new_idx as usize];
+                            }
+                        }
+                    }
+                    Focus::GraphicsPixel => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::TilesetTile => {
+                        if let Some(idx) = state.tile_idx {
+                            if idx > 0 {
+                                let new_idx = idx - 1;
+                                state.tile_idx = Some(new_idx);
+                            }
+                        }
                     }
                 }
             }
@@ -90,10 +125,44 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 key: keyboard::Key::Named(key::Named::ArrowDown),
                 ..
             }) => {
-                if let Some(idx) = state.tile_idx {
-                    if (idx as usize) + 16 < state.palettes[state.palette_idx].tiles.len() {
-                        let new_idx = idx + 16;
-                        state.tile_idx = Some(new_idx);
+                match state.focus {
+                    Focus::None => {}
+                    Focus::MainPickArea => {
+                        if let Some(area_idx) =
+                            state.area_names.iter().position(|x| x == &state.area.name)
+                        {
+                            if area_idx + 1 < state.area_names.len() {
+                                save_area(state)?;
+                                load_area(
+                                    state,
+                                    &state.area_names[area_idx + 1].clone(),
+                                    &state.area.theme.clone(),
+                                )?;
+                            }
+                        } else {
+                            bail!("Area not found: {}", state.area.name);
+                        }
+                    }
+                    Focus::MainPickTheme => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::MainArea => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::PickPalette => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::PaletteColor => {}
+                    Focus::GraphicsPixel => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::TilesetTile => {
+                        if let Some(idx) = state.tile_idx {
+                            if (idx as usize) + 16 < state.palettes[state.palette_idx].tiles.len() {
+                                let new_idx = idx + 16;
+                                state.tile_idx = Some(new_idx);
+                            }
+                        }
                     }
                 }
             }
@@ -101,10 +170,44 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 key: keyboard::Key::Named(key::Named::ArrowUp),
                 ..
             }) => {
-                if let Some(idx) = state.tile_idx {
-                    if (idx as usize) >= 16 {
-                        let new_idx = idx - 16;
-                        state.tile_idx = Some(new_idx);
+                match state.focus {
+                    Focus::None => {}
+                    Focus::MainPickArea => {
+                        if let Some(area_idx) =
+                            state.area_names.iter().position(|x| x == &state.area.name)
+                        {
+                            if area_idx > 0 {
+                                save_area(state)?;
+                                load_area(
+                                    state,
+                                    &state.area_names[area_idx - 1].clone(),
+                                    &state.area.theme.clone(),
+                                )?;
+                            }
+                        } else {
+                            bail!("Area not found: {}", state.area.name);
+                        }
+                    }
+                    Focus::MainPickTheme => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::MainArea => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::PickPalette => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::PaletteColor => {}
+                    Focus::GraphicsPixel => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::TilesetTile => {
+                        if let Some(idx) = state.tile_idx {
+                            if (idx as usize) >= 16 {
+                                let new_idx = idx - 16;
+                                state.tile_idx = Some(new_idx);
+                            }
+                        }
                     }
                 }
             }
@@ -158,20 +261,18 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             },
             _ => {}
         },
+        &Message::Focus(focus) => {
+            state.focus = focus;
+        }
         Message::SaveProject => {
-            if let Err(e) = persist::save_project(state) {
-                error!("Error saving project: {}\n{}", e, e.backtrace());
-            }
+            persist::save_project(state)?;
         }
         Message::OpenProject => {
-            return Task::perform(open_project(), Message::ProjectOpened);
+            return Ok(Task::perform(open_project(), Message::ProjectOpened));
         }
-        Message::WindowClose(id) => {
-            if let Err(e) = persist::save_project(state) {
-                error!("Error saving project: {}\n{}", e, e.backtrace());
-                return Task::none();
-            }
-            return window::close(id);
+        &Message::WindowClose(id) => {
+            persist::save_project(state)?;
+            return Ok(window::close(id));
         }
         Message::ProjectOpened(path) => {
             match path {
@@ -179,24 +280,14 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                     info!("Opening project at {}", p.display());
                     // Ensure that the old project has been persisted before loading the new:
                     if state.global_config.project_dir.is_some() {
-                        if let Err(e) = persist::save_project(state) {
-                            error!("Error saving project: {}\n{}", e, e.backtrace());
-                            return Task::none();
-                        }
+                        persist::save_project(state)?;
                     }
 
                     // Update the global config to be set to the new project:
-                    state.global_config.project_dir = Some(p);
+                    state.global_config.project_dir = Some(p.clone());
                     state.global_config.modified = true;
-                    if let Err(e) = persist::save_global_config(state) {
-                        error!("Error saving global config: {}\n{}", e, e.backtrace());
-                    }
-
-                    if let Err(e) = persist::load_project(state) {
-                        error!("Error loading project: {}\n{}", e, e.backtrace());
-                        return Task::none();
-                    }
-
+                    persist::save_global_config(state)?;
+                    persist::load_project(state)?;
                     state.dialogue = None;
                 }
                 None => {
@@ -210,34 +301,28 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::SettingsDialogue => {
             state.dialogue = Some(Dialogue::Settings);
         }
-        Message::SetPixelSize(pixel_size) => {
+        &Message::SetPixelSize(pixel_size) => {
             state.global_config.pixel_size = pixel_size;
         }
         Message::CloseDialogue => {
             state.dialogue = None;
         }
         Message::ImportDialogue => {
-            return Task::perform(open_rom(), Message::ImportConfirm);
+            return Ok(Task::perform(open_rom(), Message::ImportConfirm));
         }
         Message::ImportConfirm(path) => {
-            state.rom_path = path;
+            state.rom_path = path.clone();
             state.dialogue = Some(Dialogue::ImportROM);
         }
         Message::ImportROM => {
             if let Some(path) = &state.rom_path {
-                if let Err(e) = Importer::import(state, &path.clone()) {
-                    error!("Error importing from ROM: {}\n{}", e, e.backtrace());
-                    return Task::none();
-                }
-                if let Err(e) = load_project(state) {
-                    error!("Error loading project: {}\n{}", e, e.backtrace());
-                }
+                Importer::import(state, &path.clone())?;
                 state.dialogue = None;
             }
         }
         Message::SelectPalette(name) => {
             for i in 0..state.palettes.len() {
-                if name == format!("{}: {}", state.palettes[i].id, state.palettes[i].name) {
+                if name == &format!("{}: {}", state.palettes[i].id, state.palettes[i].name) {
                     state.palette_idx = i;
                     state.color_idx = None;
                     break;
@@ -250,15 +335,15 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 name: "".to_string(),
                 id,
             });
-            return iced::widget::text_input::focus("AddPalette");
+            return Ok(iced::widget::text_input::focus("AddPalette"));
         }
         Message::SetAddPaletteName(new_name) => match &mut state.dialogue {
             Some(Dialogue::AddPalette { name, .. }) => {
-                *name = new_name;
+                *name = new_name.clone();
             }
             _ => {}
         },
-        Message::SetAddPaletteID(new_id) => match &mut state.dialogue {
+        &Message::SetAddPaletteID(new_id) => match &mut state.dialogue {
             Some(Dialogue::AddPalette { id, .. }) => {
                 *id = new_id;
             }
@@ -269,18 +354,18 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 Some(Dialogue::AddPalette { name, id }) => {
                     if name.len() == 0 {
                         warn!("Empty palette name is invalid.");
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     for p in state.palettes.iter() {
                         if &p.name == name {
                             // Don't add non-unique palette name.
                             warn!("Palette name {} already exists.", name);
-                            return Task::none();
+                            return Ok(Task::none());
                         }
                         if p.id == *id {
                             // Don't add non-unique palette ID.
                             warn!("Palette ID {} already exists.", id);
-                            return Task::none();
+                            return Ok(Task::none());
                         }
                     }
                     let mut pal = state.palettes[state.palette_idx].clone();
@@ -299,11 +384,11 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             state.dialogue = Some(Dialogue::RenamePalette {
                 name: "".to_string(),
             });
-            return iced::widget::text_input::focus("RenamePalette");
+            return Ok(iced::widget::text_input::focus("RenamePalette"));
         }
         Message::SetRenamePaletteName(new_name) => match &mut state.dialogue {
             Some(Dialogue::RenamePalette { name }) => {
-                *name = new_name;
+                *name = new_name.clone();
             }
             _ => {}
         },
@@ -312,13 +397,13 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 Some(Dialogue::RenamePalette { name }) => {
                     if name.len() == 0 {
                         warn!("Empty palette name is invalid.");
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     for p in state.palettes.iter() {
                         if &p.name == name {
                             // Don't add non-unique palette name.
                             warn!("Palette name {} already exists.", name);
-                            return Task::none();
+                            return Ok(Task::none());
                         }
                     }
 
@@ -328,11 +413,11 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                     state.palettes[state.palette_idx].modified = true;
                     if let Err(e) = persist::save_project(state) {
                         error!("Error saving project: {}\n{}", e, e.backtrace());
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     if let Err(e) = delete_palette(state, &old_name) {
                         error!("Error deleting old palette: {}\n{}", e, e.backtrace());
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     update_palette_order(state);
                     // TODO: update currently loaded area, since palette indices may have shifted
@@ -347,13 +432,11 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::DeletePalette => {
             if state.palettes.len() == 1 {
                 warn!("Not allowed to delete the last palette.");
-                return Task::none();
+                return Ok(Task::none());
             }
 
             let name = state.palettes[state.palette_idx].name.clone();
-            if let Err(e) = persist::delete_palette(state, &name) {
-                error!("Error deleting palette file: {}\n{}", e, e.backtrace());
-            }
+            persist::delete_palette(state, &name)?;
             if state.palette_idx < state.palettes.len() {
                 state.palettes.remove(state.palette_idx);
                 if state.palette_idx == state.palettes.len() {
@@ -366,7 +449,8 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::HideModal => {
             state.dialogue = None;
         }
-        Message::ClickColor(idx) => {
+        &Message::ClickColor(idx) => {
+            // This is silly. TODO: split this into two message variants.
             let pal_idx = state.palette_idx;
             if state.brush_mode {
                 state.palettes[pal_idx].colors[idx as usize] = state.selected_color;
@@ -374,9 +458,10 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             } else {
                 state.color_idx = Some(idx);
                 state.selected_color = state.palettes[pal_idx].colors[idx as usize];
+                state.focus = Focus::PaletteColor;
             }
         }
-        Message::ChangeRed(c) => {
+        &Message::ChangeRed(c) => {
             if let Some(color_idx) = state.color_idx {
                 let pal_idx = state.palette_idx;
                 state.selected_color.0 = c;
@@ -384,7 +469,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 state.palettes[pal_idx].modified = true;
             }
         }
-        Message::ChangeGreen(c) => {
+        &Message::ChangeGreen(c) => {
             if let Some(color_idx) = state.color_idx {
                 let pal_idx = state.palette_idx;
                 state.selected_color.1 = c;
@@ -392,7 +477,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 state.palettes[pal_idx].modified = true;
             }
         }
-        Message::ChangeBlue(c) => {
+        &Message::ChangeBlue(c) => {
             if let Some(color_idx) = state.color_idx {
                 let pal_idx = state.palette_idx;
                 state.selected_color.2 = c;
@@ -409,7 +494,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::DeleteTileRow => {
             if state.palettes[state.palette_idx].tiles.len() <= 16 {
                 warn!("Not allowed to delete the last row of tiles.");
-                return Task::none();
+                return Ok(Task::none());
             }
             let new_size = state.palettes[state.palette_idx].tiles.len() - 16;
             state.palettes[state.palette_idx]
@@ -437,17 +522,8 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             }
             state.palettes[state.palette_idx].modified = true;
         }
-        // Message::ClickTile(idx) => {
-        //     if state.brush_mode {
-        //         state.palettes[state.palette_idx].tiles[idx as usize] = state.selected_tile;
-        //         state.palettes[state.palette_idx].modified = true;
-        //     } else {
-        //         state.tile_idx = Some(idx);
-        //         state.selected_tile = state.palettes[state.palette_idx].tiles[idx as usize];
-        //         state.pixel_coords = None
-        //     }
-        // }
-        Message::ClickPixel(x, y) => {
+        &Message::ClickPixel(x, y) => {
+            // This is silly. TODO: Split this into two message variants.
             state.pixel_coords = Some((x, y));
             if let Some(tile_idx) = state.tile_idx {
                 let pal = &mut state.palettes[state.palette_idx];
@@ -460,6 +536,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                     let color_idx = pal.tiles[tile_idx as usize][y as usize][x as usize];
                     state.color_idx = Some(color_idx);
                     state.selected_color = pal.colors[color_idx as usize];
+                    state.focus = Focus::GraphicsPixel;
                 }
             }
         }
@@ -479,21 +556,21 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 name: "".to_string(),
                 size: (2, 2),
             });
-            return iced::widget::text_input::focus("AddArea");
+            return Ok(iced::widget::text_input::focus("AddArea"));
         }
         Message::SetAddAreaName(new_name) => match &mut state.dialogue {
             Some(Dialogue::AddArea { name, .. }) => {
-                *name = new_name;
+                *name = new_name.clone();
             }
             _ => {}
         },
-        Message::SetAddAreaSizeX(new_x) => match &mut state.dialogue {
+        &Message::SetAddAreaSizeX(new_x) => match &mut state.dialogue {
             Some(Dialogue::AddArea { size, .. }) => {
                 size.0 = new_x;
             }
             _ => {}
         },
-        Message::SetAddAreaSizeY(new_y) => match &mut state.dialogue {
+        &Message::SetAddAreaSizeY(new_y) => match &mut state.dialogue {
             Some(Dialogue::AddArea { size, .. }) => {
                 size.1 = new_y;
             }
@@ -504,7 +581,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 Some(Dialogue::AddArea { name, size }) => {
                     if name.len() == 0 {
                         warn!("Empty area name is invalid.");
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     let name = name.clone();
                     let size = size.clone();
@@ -512,7 +589,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                         if s == &name {
                             // Don't add a non-unique area name.
                             warn!("Area name {} already exists.", name);
-                            return Task::none();
+                            return Ok(Task::none());
                         }
                     }
                     for theme in state.theme_names.clone() {
@@ -531,9 +608,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                                 })
                                 .collect(),
                         };
-                        if let Err(e) = save_area(state) {
-                            error!("Error saving new area: {}\n{}", e, e.backtrace());
-                        }
+                        save_area(state)?;
                     }
                     state.dialogue = None;
                     state.area_names.push(name.clone());
@@ -546,11 +621,11 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             state.dialogue = Some(Dialogue::RenameArea {
                 name: state.area.name.clone(),
             });
-            return iced::widget::text_input::focus("RenameArea");
+            return Ok(iced::widget::text_input::focus("RenameArea"));
         }
         Message::SetRenameAreaName(new_name) => match &mut state.dialogue {
             Some(Dialogue::RenameArea { name }) => {
-                *name = new_name;
+                *name = new_name.clone();
             }
             _ => {}
         },
@@ -559,24 +634,18 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 Some(Dialogue::RenameArea { name }) => {
                     if name.len() == 0 {
                         warn!("Empty area name is invalid.");
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     let name = name.clone();
                     for s in &state.area_names {
                         if s == &name && s != &state.area.name {
                             // Don't add a non-unique area name.
                             warn!("Area name {} already exists.", name);
-                            return Task::none();
+                            return Ok(Task::none());
                         }
                     }
-                    if let Err(e) = rename_area(state, &name) {
-                        error!("Error renaming area: {}\n{}", e, e.backtrace());
-                        return Task::none();
-                    }
-                    if let Err(e) = load_area_list(state) {
-                        error!("Error reloading area listing: {}\n{}", e, e.backtrace());
-                        return Task::none();
-                    }
+                    rename_area(state, &name)?;
+                    load_area_list(state)?;
                     state.area.name = name.clone();
                     state.dialogue = None;
                 }
@@ -589,46 +658,29 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::DeleteArea => {
             if state.area_names.len() == 1 {
                 warn!("Not allowed to delete the last remaining area.");
-                return Task::none();
+                return Ok(Task::none());
             }
-            if let Err(e) = delete_area(state, &state.area.name.clone()) {
-                error!("Error deleting area: {}\n{}", e, e.backtrace());
-                return Task::none();
-            }
-            if let Err(e) = load_area_list(state) {
-                error!("Error reloading area listing: {}\n{}", e, e.backtrace());
-                return Task::none();
-            }
-            if let Err(e) = load_area(
+            delete_area(state, &state.area.name.clone())?;
+            load_area_list(state)?;
+            load_area(
                 state,
                 &state.area_names[0].clone(),
                 &state.area.theme.clone(),
-            ) {
-                error!("Error loading area: {}\n{}", e, e.backtrace());
-                return Task::none();
-            }
+            )?;
             state.dialogue = None;
         }
         Message::SelectTheme(theme) => {
-            if let Err(err) = load_area(state, &state.area.name.clone(), &theme) {
-                error!(
-                    "Error loading theme {} (area {}): {}\n{}",
-                    theme,
-                    state.area.name,
-                    err,
-                    err.backtrace()
-                );
-            }
+            load_area(state, &state.area.name.clone(), &theme)?;
         }
         Message::AddThemeDialogue => {
             state.dialogue = Some(Dialogue::AddTheme {
                 name: "".to_string(),
             });
-            return iced::widget::text_input::focus("AddTheme");
+            return Ok(iced::widget::text_input::focus("AddTheme"));
         }
         Message::SetAddThemeName(new_name) => match &mut state.dialogue {
             Some(Dialogue::AddTheme { name }) => {
-                *name = new_name;
+                *name = new_name.clone();
             }
             _ => {}
         },
@@ -637,22 +689,19 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 Some(Dialogue::AddTheme { name: theme }) => {
                     if theme.len() == 0 {
                         warn!("Empty theme name is invalid.");
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     let theme = theme.to_string();
                     for t in &state.theme_names {
                         if t == &theme {
                             // Don't add a non-unique theme name.
                             warn!("Theme name {} already exists.", theme);
-                            return Task::none();
+                            return Ok(Task::none());
                         }
                     }
                     let old_theme = state.area.theme.clone();
                     for area_name in &state.area_names.clone() {
-                        if let Err(e) = copy_area_theme(state, area_name, &old_theme, &theme) {
-                            error!("Error copying area: {}\n{}", e, e.backtrace());
-                            return Task::none();
-                        }
+                        copy_area_theme(state, area_name, &old_theme, &theme)?;
                     }
                     state.area.theme = theme.clone();
                     state.theme_names.push(theme.clone());
@@ -666,11 +715,11 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             state.dialogue = Some(Dialogue::RenameTheme {
                 name: state.area.theme.clone(),
             });
-            return iced::widget::text_input::focus("RenameTheme");
+            return Ok(iced::widget::text_input::focus("RenameTheme"));
         }
         Message::SetRenameThemeName(new_name) => match &mut state.dialogue {
             Some(Dialogue::RenameTheme { name }) => {
-                *name = new_name;
+                *name = new_name.clone();
             }
             _ => {}
         },
@@ -679,26 +728,26 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 Some(Dialogue::RenameTheme { name: theme }) => {
                     if theme.len() == 0 {
                         warn!("Empty theme name is invalid.");
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     let theme = theme.to_string();
                     for t in &state.theme_names {
                         if t == &theme {
                             // Don't add a non-unique theme name.
                             warn!("Theme name {} already exists.", theme);
-                            return Task::none();
+                            return Ok(Task::none());
                         }
                     }
                     let old_theme = state.area.theme.clone();
                     for area_name in &state.area_names.clone() {
                         if let Err(e) = rename_area_theme(state, area_name, &old_theme, &theme) {
                             error!("Error renaming area: {}\n{}", e, e.backtrace());
-                            return Task::none();
+                            return Ok(Task::none());
                         }
                     }
                     if let Err(e) = load_area_list(state) {
                         error!("Error reloading area listing: {}\n{}", e, e.backtrace());
-                        return Task::none();
+                        return Ok(Task::none());
                     }
                     state.area.theme = theme;
                     state.dialogue = None;
@@ -712,18 +761,18 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::DeleteTheme => {
             if state.theme_names.len() == 1 {
                 warn!("Not allowed to delete the last remaining theme.");
-                return Task::none();
+                return Ok(Task::none());
             }
             let theme = state.area.theme.clone();
             for area_name in &state.area_names.clone() {
                 if let Err(e) = delete_area_theme(state, area_name, &theme) {
                     error!("Error deleting area: {}\n{}", e, e.backtrace());
-                    return Task::none();
+                    return Ok(Task::none());
                 }
             }
             if let Err(e) = load_area_list(state) {
                 error!("Error reloading area listing: {}\n{}", e, e.backtrace());
-                return Task::none();
+                return Ok(Task::none());
             }
             if let Err(e) = load_area(
                 state,
@@ -731,11 +780,11 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
                 &state.theme_names[0].clone(),
             ) {
                 error!("Error loading area: {}\n{}", e, e.backtrace());
-                return Task::none();
+                return Ok(Task::none());
             }
             state.dialogue = None;
         }
-        Message::StartTileSelection(p, source) => {
+        &Message::StartTileSelection(p, source) => {
             state.selection_source = source;
             state.start_coords = Some((p.x, p.y));
             state.end_coords = Some((p.x, p.y));
@@ -746,7 +795,7 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
         Message::EndTileSelection(p1) => {
             let p1 = (p1.x, p1.y);
             let Some(p0) = state.start_coords else {
-                return Task::none();
+                return Ok(Task::none());
             };
 
             let left = p0.0.min(p1.0);
@@ -755,13 +804,16 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             let bottom = p0.1.max(p1.1);
 
             match state.selection_source {
-                SelectionSource::MainArea => {}
+                SelectionSource::MainArea => {
+                    state.focus = Focus::MainArea;
+                }
                 SelectionSource::Tileset => {
                     if left == right && top == bottom {
                         let idx = p1.1 * 16 + p1.0;
                         state.tile_idx = Some(idx);
                         state.selected_tile = state.palettes[state.palette_idx].tiles[idx as usize];
                     }
+                    state.focus = Focus::TilesetTile;
                 }
             }
 
@@ -830,17 +882,29 @@ pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
             }
             state.area.modified = true;
         }
-        Message::OpenTile {
+        &Message::OpenTile {
             palette_id,
             tile_idx,
             flip,
         } => {
-            state.palette_idx = state.palettes_id_idx_map[&palette_id];
-            state.tile_idx = Some(tile_idx);
-            state.flip = flip;
+            if let Some(&palette_idx) = state.palettes_id_idx_map.get(&palette_id) {
+                state.palette_idx = palette_idx;
+                state.tile_idx = Some(tile_idx);
+                state.flip = flip;
+            }
         }
     }
-    Task::none()
+    Ok(Task::none())
+}
+
+pub fn update(state: &mut EditorState, message: Message) -> Task<Message> {
+    match try_update(state, &message) {
+        Ok(t) => t,
+        Err(e) => {
+            error!("Error processing {:?}: {}\n{}", message, e, e.backtrace());
+            return Task::none();
+        }
+    }
 }
 
 pub fn update_palette_order(state: &mut EditorState) {
@@ -851,7 +915,6 @@ pub fn update_palette_order(state: &mut EditorState) {
         state.palettes_id_idx_map.insert(state.palettes[i].id, i);
         if state.palettes[i].id == id {
             state.palette_idx = i;
-            break;
         }
     }
 }

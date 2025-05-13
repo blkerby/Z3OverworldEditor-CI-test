@@ -9,7 +9,7 @@ use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{ColorIdx, EditorState},
+    state::{ColorIdx, EditorState, Focus, PaletteId},
 };
 
 use super::modal_background_style;
@@ -159,6 +159,7 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
                 Some(selected_palette_name),
                 Message::SelectPalette
             )
+            .on_open(Message::Focus(Focus::PickPalette))
             .width(Length::Fill),
             button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::success)
@@ -193,7 +194,7 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
     row![col].padding(10).into()
 }
 
-pub fn add_palette_view(name: &String, id: u8) -> Element<Message> {
+pub fn add_palette_view(name: &String, id: PaletteId) -> Element<Message> {
     container(
         column![
             text("Select a name and ID for the new palette"),

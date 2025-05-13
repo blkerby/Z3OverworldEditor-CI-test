@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use iced::Point;
 
-use crate::state::{ColorIdx, ColorValue, Flip, PaletteId, PixelCoord, TileCoord, TileIdx};
+use crate::state::{ColorIdx, ColorValue, Flip, Focus, PaletteId, PixelCoord, TileCoord, TileIdx};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SelectionSource {
     MainArea,
     Tileset,
@@ -13,6 +13,7 @@ pub enum SelectionSource {
 #[derive(Debug, Clone)]
 pub enum Message {
     Event(iced::Event),
+    Focus(Focus),
     WindowClose(iced::window::Id),
     SaveProject,
     OpenProject,
@@ -26,7 +27,7 @@ pub enum Message {
     SelectPalette(String),
     AddPaletteDialogue,
     SetAddPaletteName(String),
-    SetAddPaletteID(u8),
+    SetAddPaletteID(PaletteId),
     AddPalette,
     DeletePaletteDialogue,
     DeletePalette,
@@ -70,6 +71,6 @@ pub enum Message {
     OpenTile {
         palette_id: PaletteId,
         tile_idx: TileIdx,
-        flip: Flip
-    }
+        flip: Flip,
+    },
 }

@@ -10,7 +10,7 @@ use crate::{message::SelectionSource, persist};
 
 pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
-pub type PaletteId = u8; // ID of the palette
+pub type PaletteId = u16; // ID of the palette
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type TileCoord = u16; // Index into area: number of 8x8 tiles from top-left corner
@@ -114,9 +114,9 @@ pub struct Area {
     pub name: String,
     #[serde(skip_serializing, skip_deserializing)]
     pub theme: String,
-    // X and Y dimensions, measured in number of subscreens:
+    // X and Y dimensions, measured in number of screens:
     pub size: (u8, u8),
-    // A 'subscreen' is a 256x256 pixel section, roughly the size that fits on camera at once.
+    // A 'screen' is a 256x256 pixel section, roughly the size that fits on camera at once.
     // Splitting it up like this helps with formatting of the JSON, e.g. for viewing git diffs.
     pub screens: Vec<Screen>,
 }
@@ -172,7 +172,7 @@ impl Area {
 pub enum Dialogue {
     Settings,
     ImportROM,
-    AddPalette { name: String, id: u8 },
+    AddPalette { name: String, id: PaletteId },
     RenamePalette { name: String },
     DeletePalette,
     AddArea { name: String, size: (u8, u8) },
@@ -191,6 +191,22 @@ pub struct TileBlock {
     pub flips: Vec<Vec<Flip>>,
 }
 
+// At the moment, Iced's support for tracking widget focus is fairly incomplete,
+// so we handle it manually. This is used to determine the behavior of
+// keyboard inputs (e.g. arrow keys to move through pick-lists or navigate grids).
+#[derive(Copy, Clone, Default, Debug)]
+pub enum Focus {
+    #[default]
+    None,
+    MainPickArea,
+    MainPickTheme,
+    MainArea,
+    PickPalette,
+    PaletteColor,
+    GraphicsPixel,
+    TilesetTile,
+}
+
 pub struct EditorState {
     pub global_config_path: PathBuf,
     pub global_config: GlobalConfig,
@@ -205,6 +221,7 @@ pub struct EditorState {
     pub rom_path: Option<PathBuf>,
 
     // General editing state:
+    pub focus: Focus,
     pub brush_mode: bool,
 
     // Palette editing state:
@@ -231,7 +248,7 @@ pub struct EditorState {
     pub dialogue: Option<Dialogue>,
 
     // Cached data:
-    pub palettes_id_idx_map: HashMap<u8, usize>,
+    pub palettes_id_idx_map: HashMap<PaletteId, usize>,
 }
 
 fn get_global_config_path() -> Result<PathBuf> {
@@ -292,6 +309,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         area_names: vec![],
         theme_names: vec![],
         brush_mode: false,
+        focus: Focus::None,
         palette_idx: 0,
         color_idx: None,
         selected_color: (0, 0, 0),

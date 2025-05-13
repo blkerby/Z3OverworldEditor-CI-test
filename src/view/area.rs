@@ -15,7 +15,7 @@ use log::info;
 
 use crate::{
     message::{Message, SelectionSource},
-    state::{scale_color, Area, EditorState, Palette, PaletteId, TileBlock, TileCoord},
+    state::{scale_color, Area, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord},
 };
 
 use super::modal_background_style;
@@ -166,7 +166,11 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                     let flip = self.area.get_flip(coords.x, coords.y);
                     return (
                         canvas::event::Status::Captured,
-                        Some(Message::OpenTile { palette_id, tile_idx, flip }),
+                        Some(Message::OpenTile {
+                            palette_id,
+                            tile_idx,
+                            flip,
+                        }),
                     );
                 }
                 // mouse::Event::CursorLeft => {}
@@ -465,6 +469,7 @@ pub fn area_controls(state: &EditorState) -> Element<Message> {
             Some(state.area.name.clone()),
             Message::SelectArea
         )
+        .on_open(Message::Focus(Focus::MainPickArea))
         .width(200),
         button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
             .style(button::success)
@@ -477,6 +482,7 @@ pub fn area_controls(state: &EditorState) -> Element<Message> {
             Some(state.area.theme.clone()),
             Message::SelectTheme
         )
+        .on_open(Message::Focus(Focus::MainPickTheme))
         .width(200),
         button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
             .style(button::success)
