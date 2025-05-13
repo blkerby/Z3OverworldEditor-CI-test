@@ -156,24 +156,18 @@ pub fn graphics_view(state: &EditorState) -> Element<Message> {
         .width(400)
         .align_x(iced::alignment::Horizontal::Center);
     if let Some(idx) = state.tile_idx {
+        let tile = pal.tiles[idx as usize];
         col = col.push(row![
             column![
                 text(format!("Tile: {}", idx)),
-                text(format!(
-                    "{}flip",
-                    match state.flip {
-                        Flip::None => "No ",
-                        Flip::Horizontal => "H-",
-                        Flip::Vertical => "V-",
-                        Flip::Both => "HV-",
-                    }
-                )),
+                text(format!("Priority: {}", tile.priority)),
+                text(format!("Collision: {}", tile.collision)),
             ]
             .padding(10),
             horizontal_space(),
             canvas(GraphicsBox {
                 colors: pal.colors,
-                tile: pal.tiles[idx as usize],
+                tile,
                 pixel_coords: state.pixel_coords,
                 pixel_size: 24.0,
                 thickness: 1.0,

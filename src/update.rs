@@ -239,7 +239,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                             state.selected_tile_block.flips[i][j] =
                                 state.selected_tile_block.flips[i][j].flip_horizontally();
                             state.selected_gfx[i][j] =
-                                Flip::Horizontal.apply(state.selected_gfx[i][j]);
+                                Flip::Horizontal.apply_to_tile(state.selected_gfx[i][j]);
                         }
                     }
                 }
@@ -253,7 +253,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                             state.selected_tile_block.flips[i][j] =
                                 state.selected_tile_block.flips[i][j].flip_vertically();
                             state.selected_gfx[i][j] =
-                                Flip::Vertical.apply(state.selected_gfx[i][j]);
+                                Flip::Vertical.apply_to_tile(state.selected_gfx[i][j]);
                         }
                     }
                 }
@@ -906,12 +906,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
         &Message::OpenTile {
             palette_id,
             tile_idx,
-            flip,
         } => {
             if let Some(&palette_idx) = state.palettes_id_idx_map.get(&palette_id) {
                 state.palette_idx = palette_idx;
                 state.tile_idx = Some(tile_idx);
-                state.flip = flip;
             }
         }
     }

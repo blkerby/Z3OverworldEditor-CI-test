@@ -169,7 +169,6 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         Some(Message::OpenTile {
                             palette_id,
                             tile_idx,
-                            flip,
                         }),
                     );
                 }
@@ -226,7 +225,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         }
                         let flip = screen.flips[ty][tx];
                         let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
-                        let tile = flip.apply(tile);
+                        let tile = flip.apply_to_tile(tile);
                         let cb = &color_bytes[palette_idx];
                         let mut tile_addr = screen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
                         for py in 0..8 {
@@ -261,7 +260,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                             let tile_idx = self.tile_block.tiles[ty][tx];
                             let flip = self.tile_block.flips[ty][tx];
                             let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
-                            let tile = flip.apply(tile);
+                            let tile = flip.apply_to_tile(tile);
                             let cb = &color_bytes[palette_idx];
                             let mut tile_addr =
                                 base_addr + ty * 8 * row_stride + tx * 8 * col_stride;
@@ -556,11 +555,11 @@ pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Me
                     .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Green"),
-                number_input(&state.selected_color.1, 0..=31, Message::EditAreaBGGreen)
+                number_input(&state.area.bg_color.1, 0..=31, Message::EditAreaBGGreen)
                     .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Blue"),
-                number_input(&state.selected_color.2, 0..=31, Message::EditAreaBGBlue)
+                number_input(&state.area.bg_color.2, 0..=31, Message::EditAreaBGBlue)
                     .width(rgb_width),
             ]
             .spacing(5)

@@ -1,5 +1,5 @@
 use anyhow::{bail, ensure, Context, Result};
-use hashbrown::HashMap;
+use hashbrown::{hash_map::Entry, HashMap};
 use itertools::Itertools;
 use log::{info, warn};
 use std::{
@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    persist::{delete_palette, load_project, remap_tiles, save_area, save_project},
+    persist::{load_project, remap_tiles, save_area, save_project},
     state::{
         Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile, TileIdx,
     },
@@ -258,6 +258,7 @@ pub struct Importer<'a> {
     map_palettes: Vec<MapPalettes>,
     map_gfx: Vec<[u8; 8]>,
     tile_types: Vec<u8>,
+    pal_bg_color: HashMap<PaletteId, ColorRGB>,
 }
 
 impl Rom {
@@ -390,6 +391,7 @@ impl<'a> Importer<'a> {
             map_palettes: vec![],
             map_gfx: vec![],
             tile_types: vec![],
+            pal_bg_color: HashMap::new(),
         })
     }
 
@@ -405,8 +407,8 @@ impl<'a> Importer<'a> {
         self.load_map_palettes()?;
         self.load_map_gfx()?;
         self.load_areas()?;
-        self.prune_tiles()?;
         self.prune_palettes()?;
+        self.assign_bg_colors()?;
         save_project(self.state)?;
         load_project(self.state)?;
         Ok(())
@@ -434,7 +436,8 @@ impl<'a> Importer<'a> {
             colors,
             tiles: vec![
                 Tile {
-                    collision: None,
+                    priority: false,
+                    collision: 0,
                     pixels: [[0; 8]; 8],
                 };
                 16
@@ -513,19 +516,6 @@ impl<'a> Importer<'a> {
                 }
                 self.tiles8.push(tile);
             }
-        }
-
-        for p in &mut self.state.palettes {
-            p.tiles = self
-                .tiles8
-                .iter()
-                .cloned()
-                .map(|t| Tile {
-                    collision: None,
-                    pixels: t,
-                })
-                .collect();
-            p.modified = true;
         }
         Ok(())
     }
@@ -760,7 +750,12 @@ impl<'a> Importer<'a> {
         let tile16_offsets = [(0, 0), (1, 0), (0, 1), (1, 1)];
         self.state.theme_names = vec!["Base".to_string()];
         self.state.area_names.clear();
-        for parent in 0..0xA0 {
+
+        let mut tile_lookup: Vec<HashMap<Tile, (usize, Flip)>> =
+            vec![HashMap::new(); self.state.palettes.len()];
+        let mut used_tiles: Vec<Vec<Tile>> = vec![vec![]; self.state.palettes.len()];
+
+        for parent in 0..=0x81 {
             if self.map_parents[parent] as usize != parent {
                 continue;
             }
@@ -835,7 +830,7 @@ impl<'a> Importer<'a> {
                                         + ty * 4
                                         + tile32_offsets[i].1
                                         + tile16_offsets[j].1;
-                                    let tile_idx = gfx_idxs[t8.gfx_char as usize];
+                                    let tiles8_idx = gfx_idxs[t8.gfx_char as usize];
                                     let gfx_sheet = t8.gfx_char / 64;
                                     ensure!(gfx_sheet < 8);
                                     let pal_high = [0, 3, 4, 5].contains(&gfx_sheet);
@@ -858,24 +853,48 @@ impl<'a> Importer<'a> {
                                         }
                                     };
                                     let palette_idx = self.state.palettes_id_idx_map[&pal_id];
-                                    let collision = self.tile_types[t8.gfx_char as usize] as u16;
-                                    if let Some(c) = self.state.palettes[palette_idx].tiles
-                                        [tile_idx as usize]
-                                        .collision
+                                    let collision = self.tile_types[t8.gfx_char as usize];
+                                    let pixels =
+                                        t8.flip.apply_to_pixels(self.tiles8[tiles8_idx as usize]);
+                                    let tile = Tile {
+                                        priority: t8.priority,
+                                        collision,
+                                        pixels,
+                                    };
+                                    let (tile_idx, flip) = match tile_lookup[palette_idx].get(&tile)
                                     {
-                                        if c != collision {
-                                            // Use invalid collision value 256 as a marker for ambiguous
-                                            self.state.palettes[palette_idx].tiles
-                                                [tile_idx as usize]
-                                                .collision = Some(256);
+                                        Some(x) => *x,
+                                        None => {
+                                            let idx = used_tiles[palette_idx].len();
+                                            used_tiles[palette_idx].push(tile);
+                                            for flip in [
+                                                Flip::None,
+                                                Flip::Horizontal,
+                                                Flip::Vertical,
+                                                Flip::Both,
+                                            ] {
+                                                tile_lookup[palette_idx]
+                                                    .insert(flip.apply_to_tile(tile), (idx, flip));
+                                            }
+                                            (idx, Flip::None)
                                         }
-                                    } else {
-                                        self.state.palettes[palette_idx].tiles[tile_idx as usize]
-                                            .collision = Some(collision);
-                                    }
-                                    area.set_tile(x as u16, y as u16, tile_idx);
+                                    };
+
+                                    area.set_tile(x as u16, y as u16, tile_idx as u16);
                                     area.set_palette(x as u16, y as u16, pal_id);
-                                    area.set_flip(x as u16, y as u16, t8.flip);
+                                    area.set_flip(x as u16, y as u16, flip);
+
+                                    match self.pal_bg_color.entry(pal_id) {
+                                        Entry::Occupied(mut occupied_entry) => {
+                                            if occupied_entry.get() != &bg_color {
+                                                // Use black as a marker of ambiguous BG color
+                                                occupied_entry.insert((0, 0, 0));
+                                            }
+                                        }
+                                        Entry::Vacant(vacant_entry) => {
+                                            vacant_entry.insert(bg_color);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -885,31 +904,9 @@ impl<'a> Importer<'a> {
             self.state.area = area;
             save_area(self.state)?;
         }
-        Ok(())
-    }
-
-    fn prune_tiles(&mut self) -> Result<()> {
-        let mut map: HashMap<(PaletteId, TileIdx), (PaletteId, TileIdx)> = HashMap::new();
-        for pal_idx in 0..self.state.palettes.len() {
-            let pal_id = self.state.palettes[pal_idx].id;
-            let mut new_tiles: Vec<Tile> = vec![];
-            for tile_idx in 0..self.state.palettes[pal_idx].tiles.len() {
-                if self.state.palettes[pal_idx].tiles[tile_idx]
-                    .collision
-                    .is_some()
-                {
-                    map.insert(
-                        (pal_id, tile_idx as TileIdx),
-                        (pal_id, new_tiles.len() as TileIdx),
-                    );
-                    new_tiles.push(self.state.palettes[pal_idx].tiles[tile_idx]);
-                }
-            }
-            new_tiles.resize((new_tiles.len() + 15) / 16 * 16, Tile::default());
-            self.state.palettes[pal_idx].tiles = new_tiles;
-            self.state.palettes[pal_idx].modified = true;
+        for i in 0..self.state.palettes.len() {
+            self.state.palettes[i].tiles = used_tiles[i].clone();
         }
-        remap_tiles(self.state, &map)?;
         Ok(())
     }
 
@@ -921,6 +918,18 @@ impl<'a> Importer<'a> {
             }
         }
         self.state.palettes = new_palettes;
+        Ok(())
+    }
+
+    fn assign_bg_colors(&mut self) -> Result<()> {
+        // If a given BG color is consistently used with a palette, then assign
+        // it to color 0 of the palette. This won't have any effect in-game, but
+        // it helps with rendering the tileset more accurately in the editor.
+        for p in &mut self.state.palettes {
+            if let Some(&c) = self.pal_bg_color.get(&p.id) {
+                p.colors[0] = c;
+            }
+        }
         Ok(())
     }
 }

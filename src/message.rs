@@ -74,6 +74,5 @@ pub enum Message {
     OpenTile {
         palette_id: PaletteId,
         tile_idx: TileIdx,
-        flip: Flip,
     },
 }

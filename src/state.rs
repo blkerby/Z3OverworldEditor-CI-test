@@ -16,9 +16,10 @@ pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type TileCoord = u16; // Index into area: number of 8x8 tiles from top-left corner
 pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
 
-#[derive(Copy, Clone, Serialize, Deserialize, Default, Debug)]
+#[derive(Copy, Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Hash)]
 pub struct Tile {
-    pub collision: Option<u16>,
+    pub priority: bool,
+    pub collision: u8,
     pub pixels: [[ColorIdx; 8]; 8],
 }
 
@@ -78,25 +79,30 @@ impl Flip {
         }
     }
 
-    pub fn apply(self, mut tile: Tile) -> Tile {
-        // TODO: also apply flips to slope collisions
+    pub fn apply_to_pixels(self, mut pixels: [[ColorIdx; 8]; 8]) -> [[ColorIdx; 8]; 8] {
         match self {
             Flip::None => {}
             Flip::Horizontal => {
-                for row in tile.pixels.iter_mut() {
+                for row in pixels.iter_mut() {
                     row.reverse();
                 }
             }
             Flip::Vertical => {
-                tile.pixels.reverse();
+                pixels.reverse();
             }
             Flip::Both => {
-                for row in tile.pixels.iter_mut() {
+                for row in pixels.iter_mut() {
                     row.reverse();
                 }
-                tile.pixels.reverse();
+                pixels.reverse();
             }
         }
+        pixels
+    }
+
+    pub fn apply_to_tile(self, mut tile: Tile) -> Tile {
+        // TODO: also apply flips to slope collisions
+        tile.pixels = self.apply_to_pixels(tile.pixels);
         tile
     }
 }
@@ -239,7 +245,6 @@ pub struct EditorState {
     // Tile editing state:
     pub tile_idx: Option<TileIdx>,
     pub selected_tile: Tile,
-    pub flip: Flip,
 
     // Graphics editing state:
     pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
@@ -299,7 +304,8 @@ pub fn ensure_palettes_non_empty(state: &mut EditorState) {
         pal.name = "Default".to_string();
         pal.tiles = vec![
             Tile {
-                collision: None,
+                priority: false,
+                collision: 0,
                 pixels: [[0; 8]; 8]
             };
             16
@@ -327,7 +333,6 @@ pub fn get_initial_state() -> Result<EditorState> {
         color_idx: None,
         selected_color: (0, 0, 0),
         tile_idx: None,
-        flip: Flip::None,
         selected_tile: Tile::default(),
         selection_source: SelectionSource::MainArea,
         start_coords: None,
