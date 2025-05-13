@@ -1,5 +1,6 @@
 mod area;
 mod graphics;
+mod helpers;
 mod palette;
 mod settings;
 mod tiles;

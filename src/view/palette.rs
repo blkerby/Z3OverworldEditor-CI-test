@@ -137,9 +137,9 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
     for i in 0..16 {
         colors_row = colors_row.push(
             canvas(ColorBox {
-                r: pal.colors[i].0 as f32 / 31.0,
-                g: pal.colors[i].1 as f32 / 31.0,
-                b: pal.colors[i].2 as f32 / 31.0,
+                r: pal.colors[i][0] as f32 / 31.0,
+                g: pal.colors[i][1] as f32 / 31.0,
+                b: pal.colors[i][2] as f32 / 31.0,
                 thickness: 2.0,
                 selected: Some(i as ColorIdx) == state.color_idx,
                 brush_mode: state.brush_mode,
@@ -177,14 +177,14 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
         col = col.push(
             row![
                 text("Red"),
-                number_input(&state.selected_color.0, 0..=31, Message::ChangeRed).width(rgb_width),
+                number_input(&state.selected_color[0], 0..=31, Message::ChangeRed).width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Green"),
-                number_input(&state.selected_color.1, 0..=31, Message::ChangeGreen)
+                number_input(&state.selected_color[1], 0..=31, Message::ChangeGreen)
                     .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Blue"),
-                number_input(&state.selected_color.2, 0..=31, Message::ChangeBlue).width(rgb_width),
+                number_input(&state.selected_color[2], 0..=31, Message::ChangeBlue).width(rgb_width),
             ]
             .spacing(5)
             .align_y(iced::alignment::Vertical::Center),

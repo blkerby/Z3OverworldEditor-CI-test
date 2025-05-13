@@ -14,12 +14,13 @@ pub type PaletteId = u16; // ID of the palette
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type TileCoord = u16; // Index into area: number of 8x8 tiles from top-left corner
-pub type ColorRGB = (ColorValue, ColorValue, ColorValue);
+pub type CollisionType = u8;
+pub type ColorRGB = [ColorValue; 3];
 
 #[derive(Copy, Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Hash)]
 pub struct Tile {
     pub priority: bool,
-    pub collision: u8,
+    pub collision: CollisionType,
     pub pixels: [[ColorIdx; 8]; 8],
 }
 
@@ -245,6 +246,7 @@ pub struct EditorState {
     // Tile editing state:
     pub tile_idx: Option<TileIdx>,
     pub selected_tile: Tile,
+    pub identify_tile: bool,
 
     // Graphics editing state:
     pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
@@ -331,9 +333,10 @@ pub fn get_initial_state() -> Result<EditorState> {
         focus: Focus::None,
         palette_idx: 0,
         color_idx: None,
-        selected_color: (0, 0, 0),
+        selected_color: [0, 0, 0],
         tile_idx: None,
         selected_tile: Tile::default(),
+        identify_tile: false,
         selection_source: SelectionSource::MainArea,
         start_coords: None,
         end_coords: None,

@@ -1,9 +1,11 @@
 // Module for displaying and editing 8x8 graphics pixel-by-pixel
 use iced::{
+    alignment::Vertical,
     mouse,
-    widget::{canvas, column, horizontal_space, row, text, Column},
+    widget::{canvas, checkbox, column, horizontal_space, pick_list, row, text, Column},
     Element, Size,
 };
+use iced_aw::number_input;
 
 use crate::{
     message::Message,
@@ -93,9 +95,9 @@ impl canvas::Program<Message> for GraphicsBox {
             for x in 0..8 {
                 let color_idx = self.tile.pixels[y][x];
                 let color = self.colors[color_idx as usize];
-                let r = color.0 as f32 / 31.0;
-                let g = color.1 as f32 / 31.0;
-                let b = color.2 as f32 / 31.0;
+                let r = color[0] as f32 / 31.0;
+                let g = color[1] as f32 / 31.0;
+                let b = color[2] as f32 / 31.0;
                 frame.fill_rectangle(
                     iced::Point {
                         x: x as f32 * self.pixel_size + self.thickness,
@@ -152,17 +154,48 @@ impl canvas::Program<Message> for GraphicsBox {
 
 pub fn graphics_view(state: &EditorState) -> Element<Message> {
     let pal = &state.palettes[state.palette_idx];
+    let pal_id = pal.id;
     let mut col: Column<Message> = Column::new()
         .width(400)
         .align_x(iced::alignment::Horizontal::Center);
     if let Some(idx) = state.tile_idx {
         let tile = pal.tiles[idx as usize];
+        let label_width = 105;
         col = col.push(row![
             column![
-                text(format!("Tile: {}", idx)),
-                text(format!("Priority: {}", tile.priority)),
-                text(format!("Collision: {}", tile.collision)),
+                row![
+                    text("Tile number").width(label_width),
+                    text(format!("${:02X} ({})", idx, idx)),
+                ]
+                .align_y(Vertical::Center),
+                row![
+                    text("Priority").width(label_width),
+                    pick_list(
+                        ["No", "Yes"],
+                        Some(if tile.priority { "Yes" } else { "No" }),
+                        move |x| Message::SetTilePriority {
+                            palette_id: pal_id,
+                            tile_idx: idx,
+                            priority: x == "Yes"
+                        }
+                    )
+                    .text_size(12)
+                ]
+                .align_y(Vertical::Center),
+                row![
+                    text("Collision").width(label_width),
+                    number_input(&tile.collision, 0..=255, move |x| {
+                        Message::SetTileCollision {
+                            palette_id: pal_id,
+                            tile_idx: idx,
+                            collision: x,
+                        }
+                    })
+                    .width(60),
+                ]
+                .align_y(Vertical::Center),
             ]
+            .spacing(15)
             .padding(10),
             horizontal_space(),
             canvas(GraphicsBox {
@@ -175,8 +208,7 @@ pub fn graphics_view(state: &EditorState) -> Element<Message> {
                 color_selected: state.color_idx.is_some(),
             })
             .width(24 * 8 + 2)
-            .height(24 * 8 + 4),
-            horizontal_space()
+            .height(24 * 8 + 4)
         ]);
     }
     col.into()

@@ -15,7 +15,11 @@ use log::info;
 
 use crate::{
     message::{Message, SelectionSource},
-    state::{scale_color, Area, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord},
+    state::{
+        scale_color, Area, ColorRGB, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord,
+        TileIdx,
+    },
+    view::helpers::alpha_blend,
 };
 
 use super::modal_background_style;
@@ -33,6 +37,9 @@ struct AreaGrid<'a> {
     // thickness: f32,
     brush_mode: bool,
     tile_block: &'a TileBlock,
+    identify_tile: bool,
+    palette_idx: usize,
+    tile_idx: Option<TileIdx>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -154,23 +161,21 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Right) => {
                     state.action = InternalStateAction::None;
-                    let coords = if let Some(p) = cursor.position() {
-                        clamped_position_in(p, bounds, self.area.size, self.pixel_size)
-                    } else if let Some(c) = self.end_coords {
-                        Point::new(c.0, c.1)
+                    if let Some(p) = cursor.position_over(bounds) {
+                        let coords =
+                            clamped_position_in(p, bounds, self.area.size, self.pixel_size);
+                        let palette_id = self.area.get_palette(coords.x, coords.y);
+                        let tile_idx = self.area.get_tile(coords.x, coords.y);
+                        return (
+                            canvas::event::Status::Captured,
+                            Some(Message::OpenTile {
+                                palette_id,
+                                tile_idx,
+                            }),
+                        );
                     } else {
                         return (canvas::event::Status::Ignored, None);
                     };
-                    let palette_id = self.area.get_palette(coords.x, coords.y);
-                    let tile_idx = self.area.get_tile(coords.x, coords.y);
-                    let flip = self.area.get_flip(coords.x, coords.y);
-                    return (
-                        canvas::event::Status::Captured,
-                        Some(Message::OpenTile {
-                            palette_id,
-                            tile_idx,
-                        }),
-                    );
                 }
                 // mouse::Event::CursorLeft => {}
                 _ => {}
@@ -189,14 +194,14 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let mut color_bytes: Vec<Vec<[u8; 4]>> = vec![];
+        let mut color_bytes: Vec<Vec<[u8; 3]>> = vec![];
 
         for i in 0..self.palettes.len() {
             let mut colors = self.palettes[i].colors.clone();
             colors[0] = self.area.bg_color;
             let cb = colors
                 .iter()
-                .map(|&(r, g, b)| [scale_color(r), scale_color(g), scale_color(b), 255])
+                .map(|&[r, g, b]| [scale_color(r), scale_color(g), scale_color(b)])
                 .collect();
             color_bytes.push(cb);
         }
@@ -205,7 +210,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
         // "nearest neighbor" filter results in the edge pixels having the wrong size.
         let num_cols = self.area.size.1 as usize * 256 + 2;
         let num_rows = self.area.size.0 as usize * 256 + 2;
-        let mut data: Vec<u8> = vec![0; num_rows * num_cols * 4];
+        let mut data: Vec<u8> = vec![255; num_rows * num_cols * 4];
         let row_stride = num_cols * 4;
         let col_stride = 4;
         for sy in 0..self.area.size.1 as usize {
@@ -228,11 +233,21 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         let tile = flip.apply_to_tile(tile);
                         let cb = &color_bytes[palette_idx];
                         let mut tile_addr = screen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
+
+                        let identify = self.identify_tile
+                            && self.palette_idx == palette_idx
+                            && self.tile_idx == Some(tile_idx);
                         for py in 0..8 {
                             let mut addr = tile_addr;
                             for px in 0..8 {
                                 let color_idx = tile.pixels[py][px];
-                                data[addr..(addr + 4)].copy_from_slice(&cb[color_idx as usize]);
+                                let mut color = cb[color_idx as usize];
+                                if identify {
+                                    let alpha = 0.5;
+                                    let pink_highlight = [255, 105, 180];
+                                    color = alpha_blend(color, pink_highlight, alpha);
+                                }
+                                data[addr..(addr + 3)].copy_from_slice(&color);
                                 addr += 4;
                             }
                             tile_addr += row_stride;
@@ -252,7 +267,6 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                 let base_addr =
                     (base_y * 8 + 1) as usize * row_stride + (base_x * 8 + 1) as usize * col_stride;
                 let alpha = 0.75;
-                let gamma = 2.2;
                 for ty in 0..self.tile_block.size.1 as usize {
                     for tx in 0..self.tile_block.size.0 as usize {
                         let palette_id = self.tile_block.palettes[ty][tx];
@@ -268,16 +282,10 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                                 let mut addr = tile_addr;
                                 for px in 0..8 {
                                     let color_idx = tile.pixels[py][px];
-                                    for k in 0..3 {
-                                        let old_color_val = data[addr + k] as f32;
-                                        let new_color_val = cb[color_idx as usize][k] as f32;
-                                        let blended_color_val = f32::powf(
-                                            (1.0 - alpha) * f32::powf(old_color_val, gamma)
-                                                + alpha * f32::powf(new_color_val, gamma),
-                                            1.0 / gamma,
-                                        );
-                                        data[addr + k] = blended_color_val as u8;
-                                    }
+                                    let old_color = [data[addr], data[addr + 1], data[addr + 2]];
+                                    let new_color = cb[color_idx as usize];
+                                    let blended_color = alpha_blend(old_color, new_color, alpha);
+                                    data[addr..addr + 3].copy_from_slice(&blended_color);
                                     addr += 4;
                                 }
                                 tile_addr += row_stride;
@@ -432,6 +440,9 @@ pub fn area_grid_view(state: &EditorState) -> Element<Message> {
                 // thickness: 1.0,
                 brush_mode: state.brush_mode,
                 tile_block: &state.selected_tile_block,
+                identify_tile: state.identify_tile,
+                palette_idx: state.palette_idx,
+                tile_idx: state.tile_idx,
             })
             .width((num_cols as f32 * 8.0 + 2.0) * pixel_size)
             .height((num_rows as f32 * 8.0 + 2.0) * pixel_size),
@@ -551,15 +562,15 @@ pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Me
             row![text("Background color:")],
             row![
                 text("Red"),
-                number_input(&state.area.bg_color.0, 0..=31, Message::EditAreaBGRed)
+                number_input(&state.area.bg_color[0], 0..=31, Message::EditAreaBGRed)
                     .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Green"),
-                number_input(&state.area.bg_color.1, 0..=31, Message::EditAreaBGGreen)
+                number_input(&state.area.bg_color[1], 0..=31, Message::EditAreaBGGreen)
                     .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Blue"),
-                number_input(&state.area.bg_color.2, 0..=31, Message::EditAreaBGBlue)
+                number_input(&state.area.bg_color[2], 0..=31, Message::EditAreaBGBlue)
                     .width(rgb_width),
             ]
             .spacing(5)

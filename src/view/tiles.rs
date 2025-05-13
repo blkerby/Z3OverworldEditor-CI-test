@@ -179,7 +179,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
             .palette
             .colors
             .iter()
-            .map(|&(r, g, b)| [scale_color(r), scale_color(g), scale_color(b), 255])
+            .map(|&[r, g, b]| [scale_color(r), scale_color(g), scale_color(b), 255])
             .collect();
 
         let tiles = &self.palette.tiles;

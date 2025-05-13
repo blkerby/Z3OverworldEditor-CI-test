@@ -421,13 +421,13 @@ impl<'a> Importer<'a> {
         name: &str,
         id: PaletteId,
     ) -> Result<()> {
-        let mut colors = [(0, 0, 0); 16];
+        let mut colors = [[0, 0, 0]; 16];
         for i in 0..size {
             let c = self.rom.read_u16(addr + i as u32 * 2)?;
             let r = c & 31;
             let g = (c >> 5) & 31;
             let b = (c >> 10) & 31;
-            colors[i + 1] = (r as ColorValue, g as ColorValue, b as ColorValue);
+            colors[i + 1] = [r as ColorValue, g as ColorValue, b as ColorValue];
         }
         self.state.palettes.push(Palette {
             modified: true,
@@ -781,9 +781,9 @@ impl<'a> Importer<'a> {
 
             let pal = &self.map_palettes[parent];
             let bg_color = match parent {
-                0x40..0x80 => (18, 17, 10),       // dark world
-                0x80 | 0x82 | 0x83 => (6, 14, 6), // dark green background (Special World)
-                _ => (9, 19, 9),                  // default green background
+                0x40..0x80 => [18, 17, 10],       // dark world
+                0x80 | 0x82 | 0x83 => [6, 14, 6], // dark green background (Special World)
+                _ => [9, 19, 9],                  // default green background
             };
             let mut area: Area = Area {
                 modified: true,
@@ -888,7 +888,7 @@ impl<'a> Importer<'a> {
                                         Entry::Occupied(mut occupied_entry) => {
                                             if occupied_entry.get() != &bg_color {
                                                 // Use black as a marker of ambiguous BG color
-                                                occupied_entry.insert((0, 0, 0));
+                                                occupied_entry.insert([0, 0, 0]);
                                             }
                                         }
                                         Entry::Vacant(vacant_entry) => {
@@ -905,6 +905,8 @@ impl<'a> Importer<'a> {
             save_area(self.state)?;
         }
         for i in 0..self.state.palettes.len() {
+            let n = used_tiles[i].len();
+            used_tiles[i].resize((n + 15) / 16 * 16, Tile::default());
             self.state.palettes[i].tiles = used_tiles[i].clone();
         }
         Ok(())

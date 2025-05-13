@@ -18,7 +18,16 @@ use crate::{
     },
     view::{open_project, open_rom},
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
+
+fn select_tileset_tile(state: &mut EditorState, tile_idx: TileIdx) -> Result<()> {
+    state.tile_idx = Some(tile_idx);
+    state.start_coords = Some((tile_idx % 16, tile_idx / 16));
+    state.end_coords = Some((tile_idx % 16, tile_idx / 16));
+    state.selection_source = SelectionSource::Tileset;
+    state.focus = Focus::TilesetTile;
+    Ok(())
+}
 
 pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Message>> {
     if state.global_config.project_dir.is_none() {
@@ -37,6 +46,22 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                     return Ok(widget::focus_previous());
                 } else {
                     return Ok(widget::focus_next());
+                }
+            }
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+                match state.focus {
+                    Focus::None => {},
+                    Focus::MainPickArea => {},
+                    Focus::MainPickTheme => {},
+                    Focus::MainArea => {},
+                    Focus::PickPalette => {},
+                    Focus::PaletteColor => {
+                        // TODO: handle this
+                    }
+                    Focus::GraphicsPixel => {}
+                    Focus::TilesetTile => {
+                        state.identify_tile = modifiers.control();
+                    }
                 }
             }
             Event::Keyboard(keyboard::Event::KeyPressed {
@@ -80,7 +105,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                         if let Some(idx) = state.tile_idx {
                             if (idx as usize) + 1 < state.palettes[state.palette_idx].tiles.len() {
                                 let new_idx = idx + 1;
-                                state.tile_idx = Some(new_idx);
+                                select_tileset_tile(state, new_idx)?;
                             }
                         }
                     }
@@ -115,7 +140,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                         if let Some(idx) = state.tile_idx {
                             if idx > 0 {
                                 let new_idx = idx - 1;
-                                state.tile_idx = Some(new_idx);
+                                select_tileset_tile(state, new_idx)?;
                             }
                         }
                     }
@@ -164,7 +189,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                         if let Some(idx) = state.tile_idx {
                             if (idx as usize) + 16 < state.palettes[state.palette_idx].tiles.len() {
                                 let new_idx = idx + 16;
-                                state.tile_idx = Some(new_idx);
+                                select_tileset_tile(state, new_idx)?;
                             }
                         }
                     }
@@ -213,7 +238,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                         if let Some(idx) = state.tile_idx {
                             if (idx as usize) >= 16 {
                                 let new_idx = idx - 16;
-                                state.tile_idx = Some(new_idx);
+                                select_tileset_tile(state, new_idx)?;
                             }
                         }
                     }
@@ -473,24 +498,24 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
         &Message::ChangeRed(c) => {
             if let Some(color_idx) = state.color_idx {
                 let pal_idx = state.palette_idx;
-                state.selected_color.0 = c;
-                state.palettes[pal_idx].colors[color_idx as usize].0 = c;
+                state.selected_color[0] = c;
+                state.palettes[pal_idx].colors[color_idx as usize][0] = c;
                 state.palettes[pal_idx].modified = true;
             }
         }
         &Message::ChangeGreen(c) => {
             if let Some(color_idx) = state.color_idx {
                 let pal_idx = state.palette_idx;
-                state.selected_color.1 = c;
-                state.palettes[pal_idx].colors[color_idx as usize].1 = c;
+                state.selected_color[1] = c;
+                state.palettes[pal_idx].colors[color_idx as usize][1] = c;
                 state.palettes[pal_idx].modified = true;
             }
         }
         &Message::ChangeBlue(c) => {
             if let Some(color_idx) = state.color_idx {
                 let pal_idx = state.palette_idx;
-                state.selected_color.2 = c;
-                state.palettes[pal_idx].colors[color_idx as usize].2 = c;
+                state.selected_color[2] = c;
+                state.palettes[pal_idx].colors[color_idx as usize][2] = c;
                 state.palettes[pal_idx].modified = true;
             }
         }
@@ -515,6 +540,30 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                 }
             }
             state.palettes[state.palette_idx].modified = true;
+        }
+        &Message::SetTilePriority {
+            palette_id,
+            tile_idx,
+            priority,
+        } => {
+            let pal_idx = *state
+                .palettes_id_idx_map
+                .get(&palette_id)
+                .context("undefined palette")?;
+            state.palettes[pal_idx].tiles[tile_idx as usize].priority = priority;
+            state.palettes[pal_idx].modified = true;
+        }
+        &Message::SetTileCollision {
+            palette_id,
+            tile_idx,
+            collision,
+        } => {
+            let pal_idx = *state
+                .palettes_id_idx_map
+                .get(&palette_id)
+                .context("undefined palette")?;
+            state.palettes[pal_idx].tiles[tile_idx as usize].collision = collision;
+            state.palettes[pal_idx].modified = true;
         }
         Message::TilesetBrush(Point { x: x0, y: y0 }) => {
             let s = &state.selected_tile_block;
@@ -665,13 +714,13 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
             }
         }
         &Message::EditAreaBGRed(c) => {
-            state.area.bg_color.0 = c;
+            state.area.bg_color[0] = c;
         }
         &Message::EditAreaBGGreen(c) => {
-            state.area.bg_color.1 = c;
+            state.area.bg_color[1] = c;
         }
         &Message::EditAreaBGBlue(c) => {
-            state.area.bg_color.2 = c;
+            state.area.bg_color[2] = c;
         }
         Message::DeleteAreaDialogue => {
             state.dialogue = Some(Dialogue::DeleteArea);
@@ -870,6 +919,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
                 flips,
             };
             let s = &state.selected_tile_block;
+
             state.selected_gfx.clear();
             for y in 0..s.size.1 {
                 let mut gfx_row: Vec<Tile> = vec![];
@@ -909,7 +959,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Task<Mes
         } => {
             if let Some(&palette_idx) = state.palettes_id_idx_map.get(&palette_id) {
                 state.palette_idx = palette_idx;
-                state.tile_idx = Some(tile_idx);
+                select_tileset_tile(state, tile_idx)?;
             }
         }
     }
