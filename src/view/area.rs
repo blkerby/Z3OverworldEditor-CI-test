@@ -212,7 +212,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
         // "nearest neighbor" filter results in the edge pixels having the wrong size.
         let num_cols = self.area.size.1 as usize * 256 + 2;
         let num_rows = self.area.size.0 as usize * 256 + 2;
-        let mut data: Vec<u8> = vec![255; num_rows * num_cols * 4];
+        let mut data: Vec<u8> = vec![0; num_rows * num_cols * 4];
         let row_stride = num_cols * 4;
         let col_stride = 4;
         for sy in 0..self.area.size.1 as usize {
@@ -268,6 +268,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                                     color = pink_highlight;
                                 }
                                 data[addr..(addr + 3)].copy_from_slice(&color);
+                                data[addr + 3] = 255;
                                 addr += 4;
                             }
                             tile_addr += row_stride;
