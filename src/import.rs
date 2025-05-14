@@ -9,7 +9,10 @@ use std::{
 };
 
 use crate::{
-    persist::{load_project, remap_tiles, save_area, save_project},
+    persist::{
+        load_area, load_project, remap_tiles, save_area, save_area_json, save_area_png,
+        save_project,
+    },
     state::{
         Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile, TileIdx,
     },
@@ -411,6 +414,11 @@ impl<'a> Importer<'a> {
         self.assign_bg_colors()?;
         save_project(self.state)?;
         load_project(self.state)?;
+        for area_name in &self.state.area_names.clone() {
+            load_area(self.state, &area_name, "Base")?;
+            save_area_png(self.state)?;
+        }
+        load_project(self.state)?; // Load again to open the first room.
         Ok(())
     }
 
@@ -566,9 +574,6 @@ impl<'a> Importer<'a> {
                     ensure!((tile16_idx as usize) < self.tiles16.len());
                     quadrant_idxs.push(tile16_idx);
                 }
-                if self.tiles32.len() == 0 || self.tiles32.len() == 1570 {
-                    info!("tile {}: {:x?}", self.tiles32.len(), quadrant_idxs);
-                }
                 self.tiles32.push([
                     quadrant_idxs[0],
                     quadrant_idxs[1],
@@ -720,10 +725,6 @@ impl<'a> Importer<'a> {
                     gfx[3 + j] = local_gfx[j];
                 }
             }
-            info!(
-                "i={:x}, local_idx=${:x}, local_gfx={:x?}, gfx={:x?}",
-                i, local_idx, local_gfx, gfx
-            );
             self.map_gfx.push(gfx.try_into().unwrap());
         }
 
@@ -781,7 +782,7 @@ impl<'a> Importer<'a> {
                 _ => [9, 19, 9],                  // default green background
             };
             let mut area: Area = Area {
-                modified: true,
+                modified: false,
                 name: match world_idx {
                     0 => format!("{:02X} Light World", parent),
                     1 => format!("{:02X} Dark World", parent),
@@ -915,7 +916,7 @@ impl<'a> Importer<'a> {
                 }
             }
             self.state.area = area;
-            save_area(self.state)?;
+            save_area_json(self.state)?;
         }
         for i in 0..self.state.palettes.len() {
             for j in 0..used_tiles[i].len() {

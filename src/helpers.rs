@@ -1,5 +1,9 @@
 use crate::state::ColorRGB;
 
+pub fn scale_color(c: u8) -> u8 {
+    ((c as u16) * 255 / 31) as u8
+}
+
 pub fn alpha_blend(bg: ColorRGB, fg: ColorRGB, alpha: f32) -> ColorRGB {
     let gamma = 2.2;
     let mut out: ColorRGB = [0, 0, 0];
@@ -11,4 +15,3 @@ pub fn alpha_blend(bg: ColorRGB, fg: ColorRGB, alpha: f32) -> ColorRGB {
     }
     out
 }
-

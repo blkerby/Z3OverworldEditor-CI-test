@@ -14,12 +14,12 @@ use iced_aw::number_input;
 use log::info;
 
 use crate::{
+    helpers::{alpha_blend, scale_color},
     message::{Message, SelectionSource},
     state::{
-        scale_color, Area, ColorIdx, ColorRGB, EditorState, Focus, Palette, PaletteId, TileBlock,
-        TileCoord, TileIdx,
+        Area, ColorIdx, ColorRGB, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord,
+        TileIdx,
     },
-    view::helpers::alpha_blend,
 };
 
 use super::modal_background_style;
@@ -213,12 +213,12 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
         let num_cols = self.area.size.1 as usize * 256 + 2;
         let num_rows = self.area.size.0 as usize * 256 + 2;
         let mut data: Vec<u8> = vec![0; num_rows * num_cols * 4];
-        let row_stride = num_cols * 4;
         let col_stride = 4;
+        let row_stride = num_cols * col_stride;
         for sy in 0..self.area.size.1 as usize {
             for sx in 0..self.area.size.0 as usize {
                 let screen = &self.area.screens[sy * self.area.size.0 as usize + sx];
-                let screen_addr = (sy * 256 + 1) * row_stride + (sx * 256 + 1) * 4;
+                let screen_addr = (sy * 256 + 1) * row_stride + (sx * 256 + 1) * col_stride;
                 for ty in 0..32 {
                     for tx in 0..32 {
                         let palette_id = screen.palettes[ty][tx];

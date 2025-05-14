@@ -1,5 +1,6 @@
 use std::{
-    fs,
+    fs::{self, File},
+    io::BufWriter,
     path::{Path, PathBuf},
 };
 
@@ -11,6 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Serializer;
 
 use crate::{
+    helpers::scale_color,
     state::{
         ensure_areas_non_empty, ensure_palettes_non_empty, ensure_themes_non_empty, EditorState,
         Palette, PaletteId, TileIdx,
@@ -62,13 +64,99 @@ fn get_palette_dir(state: &EditorState) -> Result<PathBuf> {
     Ok(get_project_dir(state)?.join("Palettes"))
 }
 
+fn save_palette_colors_png(png_path: &Path, palette: &Palette) -> Result<()> {
+    let pixel_size = 32;
+    let color_bytes: Vec<[u8; 3]> = palette
+        .colors
+        .iter()
+        .map(|&[r, g, b]| [scale_color(r), scale_color(g), scale_color(b)])
+        .collect();
+
+    let mut data: Vec<u8> = vec![];
+    for _y in 0..pixel_size {
+        for c in 0..16 {
+            for _ in 0..pixel_size {
+                data.extend(color_bytes[c]);
+            }
+        }
+    }
+
+    let path = Path::new(png_path);
+    let file = File::create(path).unwrap();
+    let ref mut w = BufWriter::new(file);
+    let mut encoder = png::Encoder::new(w, 16 * pixel_size as u32, pixel_size as u32);
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&data).unwrap();
+
+    Ok(())
+}
+
+fn save_palette_tiles_png(png_path: &Path, palette: &Palette) -> Result<()> {
+    let color_bytes: Vec<[u8; 3]> = palette
+        .colors
+        .iter()
+        .map(|&[r, g, b]| [scale_color(r), scale_color(g), scale_color(b)])
+        .collect();
+    let pixel_size = 4;
+
+    let tiles = &palette.tiles;
+    let num_cols = 16;
+    let num_rows = (tiles.len() + num_cols - 1) / num_cols;
+
+    let mut data: Vec<u8> = vec![];
+    data.reserve_exact(num_rows * num_cols * 64 * 3);
+    for y in 0..num_rows * (8 * pixel_size) {
+        for x in 0..num_cols * (8 * pixel_size) {
+            let tile_x = x / (8 * pixel_size);
+            let tile_y = y / (8 * pixel_size);
+            let pixel_x = x / pixel_size % 8;
+            let pixel_y = y / pixel_size % 8;
+            let tile_idx = tile_y * num_cols + tile_x;
+            if tile_idx >= tiles.len() {
+                data.extend([0, 0, 0, 0]);
+                continue;
+            }
+            let tile = &palette.tiles[tile_idx];
+            let color_idx = tile.pixels[pixel_y][pixel_x];
+            let color = color_bytes[color_idx as usize];
+            data.extend(&color);
+        }
+    }
+
+    let path = Path::new(png_path);
+    let file = File::create(path).unwrap();
+    let ref mut w = BufWriter::new(file);
+    let mut encoder = png::Encoder::new(
+        w,
+        num_cols as u32 * 8 * pixel_size as u32,
+        num_rows as u32 * 8 * pixel_size as u32,
+    );
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&data).unwrap();
+
+    Ok(())
+}
+
 fn save_palettes(state: &mut EditorState) -> Result<()> {
     let pal_dir = get_palette_dir(state)?;
     for pal in &mut state.palettes {
         if pal.modified {
-            let pal_filename = format!("{}.json", pal.name);
-            let pal_path = pal_dir.join(pal_filename);
-            save_json(&pal_path, pal)?;
+            let pal_json_filename = format!("{}.json", pal.name);
+            let pal_json_path = pal_dir.join(pal_json_filename);
+            save_json(&pal_json_path, pal)?;
+
+            let pal_colors_png_filename = format!("{}-colors.png", pal.name);
+            let pal_colors_png_path = pal_dir.join(pal_colors_png_filename);
+            save_palette_colors_png(&pal_colors_png_path, pal)?;
+
+            let pal_tiles_png_filename = format!("{}-tiles.png", pal.name);
+            let pal_tiles_png_path = pal_dir.join(pal_tiles_png_filename);
+            save_palette_tiles_png(&pal_tiles_png_path, pal)?;
+
             pal.modified = false;
         }
     }
@@ -142,12 +230,88 @@ pub fn load_area(state: &mut EditorState, name: &str, theme: &str) -> Result<()>
     Ok(())
 }
 
+pub fn save_area_png(state: &EditorState) -> Result<()> {
+    let mut color_bytes: Vec<Vec<[u8; 3]>> = vec![];
+    let area = &state.area;
+
+    for i in 0..state.palettes.len() {
+        let mut colors = state.palettes[i].colors.clone();
+        colors[0] = area.bg_color;
+        let cb = colors
+            .iter()
+            .map(|&[r, g, b]| [scale_color(r), scale_color(g), scale_color(b)])
+            .collect();
+        color_bytes.push(cb);
+    }
+
+    let num_cols = area.size.1 as usize * 256;
+    let num_rows = area.size.0 as usize * 256;
+    let mut data: Vec<u8> = vec![0; num_rows * num_cols * 3];
+    let col_stride = 3;
+    let row_stride = num_cols * col_stride;
+    for sy in 0..state.area.size.1 as usize {
+        for sx in 0..state.area.size.0 as usize {
+            let screen = &area.screens[sy * area.size.0 as usize + sx];
+            let screen_addr = sy * 256 * row_stride + sx * 256 * col_stride;
+            for ty in 0..32 {
+                for tx in 0..32 {
+                    let palette_id = screen.palettes[ty][tx];
+                    let Some(&palette_idx) = state.palettes_id_idx_map.get(&palette_id) else {
+                        // TODO: draw some indicator of the broken tile (due to invalid palette reference)
+                        continue;
+                    };
+                    let tile_idx = screen.tiles[ty][tx];
+                    if tile_idx as usize >= state.palettes[palette_idx].tiles.len() {
+                        // TODO: draw some indicator of the broken tile (due to invalid palette reference)
+                        continue;
+                    }
+                    let flip = screen.flips[ty][tx];
+                    let tile = state.palettes[palette_idx].tiles[tile_idx as usize];
+                    let tile = flip.apply_to_tile(tile);
+                    let cb = &color_bytes[palette_idx];
+                    let mut tile_addr = screen_addr + ty * 8 * row_stride + tx * 8 * col_stride;
+
+                    for py in 0..8 {
+                        let mut addr = tile_addr;
+                        for px in 0..8 {
+                            let color_idx = tile.pixels[py][px];
+                            let color = cb[color_idx as usize];
+                            data[addr..(addr + 3)].copy_from_slice(&color);
+                            addr += 3;
+                        }
+                        tile_addr += row_stride;
+                    }
+                }
+            }
+        }
+    }
+
+    let area_dir = get_area_dir(state)?;
+    let area_png_filename = format!("{}.png", state.area.theme);
+    let area_png_path = area_dir.join(&state.area.name).join(area_png_filename);
+    let file = File::create(&area_png_path).unwrap();
+    let ref mut w = BufWriter::new(file);
+    let mut encoder = png::Encoder::new(w, num_cols as u32, num_rows as u32);
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().unwrap();
+    writer.write_image_data(&data).unwrap();
+
+    Ok(())
+}
+
+pub fn save_area_json(state: &mut EditorState) -> Result<()> {
+    let area_dir = get_area_dir(state)?;
+    let area_json_filename = format!("{}.json", state.area.theme);
+    let area_json_path = area_dir.join(&state.area.name).join(area_json_filename);
+    save_json(&area_json_path, &state.area)?;
+    Ok(())
+}
+
 pub fn save_area(state: &mut EditorState) -> Result<()> {
     if state.area.modified {
-        let area_dir = get_area_dir(state)?;
-        let area_filename = format!("{}.json", state.area.theme);
-        let area_path = area_dir.join(&state.area.name).join(area_filename);
-        save_json(&area_path, &state.area)?;
+        save_area_json(state)?;
+        save_area_png(state)?;
         state.area.modified = false;
     }
     Ok(())

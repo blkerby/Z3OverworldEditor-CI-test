@@ -11,9 +11,9 @@ use iced::{
 use log::info;
 
 use crate::{
+    helpers::{alpha_blend, scale_color},
     message::{Message, SelectionSource},
     state::{ColorIdx, EditorState, Palette, TileCoord, TileIdx},
-    view::helpers::alpha_blend,
 };
 
 // We use two separate canvases: one for drawing the tile raster and one for the tile selection.
@@ -175,9 +175,6 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         let pixel_size = self.pixel_size;
         let thickness = self.thickness;
-        fn scale_color(c: u8) -> u8 {
-            ((c as u16) * 255 / 31) as u8
-        }
         let color_bytes: Vec<[u8; 3]> = self
             .palette
             .colors

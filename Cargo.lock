@@ -18,6 +18,7 @@ dependencies = [
  "itertools",
  "json-pretty-compact",
  "log",
+ "png",
  "rfd",
  "serde",
  "serde_json",

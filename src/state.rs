@@ -366,7 +366,3 @@ pub fn get_initial_state() -> Result<EditorState> {
     ensure_palettes_non_empty(&mut state);
     Ok(state)
 }
-
-pub fn scale_color(c: u8) -> u8 {
-    ((c as u16) * 255 / 31) as u8
-}
