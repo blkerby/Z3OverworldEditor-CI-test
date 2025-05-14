@@ -3,19 +3,22 @@ use iced::{
     alignment::Vertical,
     mouse,
     widget::{canvas, column, horizontal_space, pick_list, row, text, Column},
-    Element, Size,
+    Element, Point, Size,
 };
 use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{ColorRGB, EditorState, PixelCoord, Tile},
+    state::{ColorIdx, ColorRGB, EditorState, PaletteId, PixelCoord, Tile, TileIdx},
 };
 
 #[derive(Debug)]
 struct GraphicsBox {
     colors: [ColorRGB; 16],
     tile: Tile,
+    palette_id: PaletteId,
+    tile_idx: TileIdx,
+    color_idx: Option<ColorIdx>,
     pixel_coords: Option<(PixelCoord, PixelCoord)>,
     pixel_size: f32,
     thickness: f32,
@@ -73,19 +76,28 @@ impl canvas::Program<Message> for GraphicsBox {
                 return (canvas::event::Status::Ignored, None);
             }
             if self.brush_mode {
-                (
-                    canvas::event::Status::Captured,
-                    Some(Message::BrushPixel(x as PixelCoord, y as PixelCoord)),
-                )
+                if let Some(color_idx) = self.color_idx {
+                    return (
+                        canvas::event::Status::Captured,
+                        Some(Message::BrushPixel {
+                            palette_id: self.palette_id,
+                            tile_idx: self.tile_idx,
+                            coords: Point {
+                                x: x as PixelCoord,
+                                y: y as PixelCoord,
+                            },
+                            color_idx: color_idx,
+                        }),
+                    );
+                }
             } else {
-                (
+                return (
                     canvas::event::Status::Captured,
                     Some(Message::SelectPixel(x as PixelCoord, y as PixelCoord)),
-                )
+                );
             }
-        } else {
-            (canvas::event::Status::Ignored, None)
         }
+        (canvas::event::Status::Ignored, None)
     }
 
     fn draw(
@@ -236,6 +248,9 @@ pub fn graphics_view(state: &EditorState) -> Element<Message> {
             canvas(GraphicsBox {
                 colors: pal.colors,
                 tile,
+                palette_id: pal_id,
+                tile_idx: idx,
+                color_idx: state.color_idx,
                 pixel_coords: state.pixel_coords,
                 pixel_size: 24.0,
                 thickness: 1.0,

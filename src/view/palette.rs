@@ -9,7 +9,7 @@ use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{ColorIdx, EditorState, Focus, PaletteId},
+    state::{ColorIdx, ColorRGB, EditorState, Focus, PaletteId},
 };
 
 use super::modal_background_style;
@@ -23,6 +23,8 @@ struct ColorBox {
     selected: bool,
     brush_mode: bool,
     color_idx: ColorIdx,
+    palette_id: PaletteId,
+    selected_color: ColorRGB,
 }
 
 impl canvas::Program<Message> for ColorBox {
@@ -44,7 +46,17 @@ impl canvas::Program<Message> for ColorBox {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(button) => {
                     let message = match button {
-                        mouse::Button::Left => Some(Message::ClickColor(self.color_idx)),
+                        mouse::Button::Left => {
+                            if self.brush_mode {
+                                Some(Message::BrushColor {
+                                    palette_id: self.palette_id,
+                                    color_idx: self.color_idx,
+                                    color: self.selected_color,
+                                })
+                            } else {
+                                Some(Message::SelectColor(self.color_idx))
+                            }
+                        }
                         mouse::Button::Right => None,
                         _ => None,
                     };
@@ -144,6 +156,8 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
                 selected: Some(i as ColorIdx) == state.color_idx,
                 brush_mode: state.brush_mode,
                 color_idx: i as ColorIdx,
+                palette_id: state.palettes[state.palette_idx].id,
+                selected_color: state.selected_color,
             })
             .width(size)
             .height(size),
@@ -184,7 +198,8 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
                     .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Blue"),
-                number_input(&state.selected_color[2], 0..=31, Message::ChangeBlue).width(rgb_width),
+                number_input(&state.selected_color[2], 0..=31, Message::ChangeBlue)
+                    .width(rgb_width),
             ]
             .spacing(5)
             .align_y(iced::alignment::Vertical::Center),
@@ -203,7 +218,10 @@ pub fn add_palette_view(name: &String, id: PaletteId) -> Element<Message> {
                 text_input("", name)
                     .id("AddPalette")
                     .on_input(Message::SetAddPaletteName)
-                    .on_submit(Message::AddPalette)
+                    .on_submit(Message::AddPalette {
+                        name: name.clone(),
+                        id
+                    })
             ]
             .spacing(10)
             .align_y(Vertical::Center),
@@ -211,13 +229,19 @@ pub fn add_palette_view(name: &String, id: PaletteId) -> Element<Message> {
                 text("ID: ").width(70),
                 number_input(&id, 0..=255, Message::SetAddPaletteID)
                     .width(50)
-                    .on_submit(Message::AddPalette),
+                    .on_submit(Message::AddPalette {
+                        name: name.clone(),
+                        id
+                    }),
             ]
             .spacing(10)
             .align_y(Vertical::Center),
             button(text("Add palette"))
                 .style(button::success)
-                .on_press(Message::AddPalette),
+                .on_press(Message::AddPalette {
+                    name: name.clone(),
+                    id
+                }),
         ]
         .spacing(10),
     )
@@ -230,6 +254,10 @@ pub fn add_palette_view(name: &String, id: PaletteId) -> Element<Message> {
 pub fn rename_palette_view(state: &EditorState, name: &String) -> Element<'static, Message> {
     let idx = state.palette_idx;
     let old_name = &state.palettes[idx].name;
+    let rename_msg = Message::RenamePalette {
+        id: state.palettes[idx].id,
+        name: name.clone(),
+    };
     container(
         column![
             text(format!(
@@ -239,10 +267,10 @@ pub fn rename_palette_view(state: &EditorState, name: &String) -> Element<'stati
             text_input("", name)
                 .id("RenamePalette")
                 .on_input(Message::SetRenamePaletteName)
-                .on_submit(Message::RenamePalette)
+                .on_submit(rename_msg.clone())
                 .padding(5),
             row![
-                button(text("Rename palette")).on_press(Message::RenamePalette),
+                button(text("Rename palette")).on_press(rename_msg.clone()),
                 Space::with_width(Length::Fill),
                 button(text("Delete palette"))
                     .style(button::danger)
@@ -269,7 +297,7 @@ pub fn delete_palette_view(state: &EditorState) -> Element<Message> {
             text("This will also delete all 8x8 tiles associated to this palette."),
             button(text("Delete palette"))
                 .style(button::danger)
-                .on_press(Message::DeletePalette),
+                .on_press(Message::DeletePalette(state.palettes[idx].id)),
         ]
         .spacing(10),
     )

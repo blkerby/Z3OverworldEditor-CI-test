@@ -12,7 +12,7 @@ use iced::{
 use crate::{
     helpers::{alpha_blend, scale_color},
     message::{Message, SelectionSource},
-    state::{ColorIdx, EditorState, Palette, TileCoord},
+    state::{ColorIdx, EditorState, Palette, Tile, TileCoord},
 };
 
 // We use two separate canvases: one for drawing the tile raster and one for the tile selection.
@@ -23,6 +23,7 @@ struct TileGrid<'a> {
     palette: &'a Palette,
     pixel_size: f32,
     end_coords: Option<(TileCoord, TileCoord)>,
+    selected_gfx: &'a Vec<Vec<Tile>>,
     thickness: f32,
     brush_mode: bool,
     identify_color: bool,
@@ -81,14 +82,19 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                     if let Some(p) = cursor.position_over(bounds) {
                         if self.brush_mode {
                             state.action = InternalStateAction::Brushing;
+                            let coords = clamped_position_in(
+                                p,
+                                bounds,
+                                self.palette.tiles.len() / 16,
+                                self.pixel_size,
+                            );
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::TilesetBrush(clamped_position_in(
-                                    p,
-                                    bounds,
-                                    self.palette.tiles.len() / 16,
-                                    self.pixel_size,
-                                ))),
+                                Some(Message::TilesetBrush {
+                                    palette_id: self.palette.id,
+                                    coords,
+                                    selected_gfx: self.selected_gfx.clone(),
+                                }),
                             );
                         } else {
                             state.action = InternalStateAction::Selecting;
@@ -144,14 +150,19 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                         }
                     } else if self.brush_mode && state.action == InternalStateAction::Brushing {
                         if let Some(p) = cursor.position() {
+                            let coords = clamped_position_in(
+                                p,
+                                bounds,
+                                self.palette.tiles.len() / 16,
+                                self.pixel_size,
+                            );
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::TilesetBrush(clamped_position_in(
-                                    p,
-                                    bounds,
-                                    self.palette.tiles.len() / 16,
-                                    self.pixel_size,
-                                ))),
+                                Some(Message::TilesetBrush {
+                                    palette_id: self.palette.id,
+                                    coords,
+                                    selected_gfx: self.selected_gfx.clone(),
+                                }),
                             );
                         }
                     }
@@ -347,10 +358,10 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
             text("Tiles"),
             button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::success)
-                .on_press(Message::AddTileRow),
+                .on_press(Message::AddTileRow(state.palettes[state.palette_idx].id)),
             button(text("\u{F63B}").font(iced_fonts::BOOTSTRAP_FONT))
                 .style(button::danger)
-                .on_press(Message::DeleteTileRow),
+                .on_press(Message::DeleteTileRow(state.palettes[state.palette_idx].id)),
         ]
         .spacing(10)
         .align_y(iced::alignment::Vertical::Center),
@@ -360,6 +371,7 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
                     palette: &state.palettes[state.palette_idx],
                     pixel_size: pixel_size as f32,
                     end_coords: state.end_coords,
+                    selected_gfx: &state.selected_gfx,
                     thickness: 1.0,
                     brush_mode: state.brush_mode,
                     identify_color: state.identify_color,

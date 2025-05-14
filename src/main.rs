@@ -10,6 +10,7 @@ mod import;
 mod message;
 mod persist;
 mod state;
+mod undo;
 mod update;
 mod view;
 

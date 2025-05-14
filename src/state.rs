@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use hashbrown::HashMap;
 use log::info;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -6,7 +6,10 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{message::SelectionSource, persist};
+use crate::{
+    message::{Message, SelectionSource},
+    persist,
+};
 
 pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
@@ -26,7 +29,7 @@ pub struct Tile {
     pub pixels: [[ColorIdx; 8]; 8],
 }
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct Palette {
     #[serde(skip_serializing, skip_deserializing)]
     pub modified: bool,
@@ -53,7 +56,7 @@ fn default_pixel_size() -> f32 {
     3.0
 }
 
-#[derive(Clone, Copy, Serialize_repr, Deserialize_repr, Default, Debug)]
+#[derive(Clone, Copy, Serialize_repr, Deserialize_repr, Default, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Flip {
     #[default]
@@ -138,50 +141,47 @@ pub struct Area {
 }
 
 impl Area {
-    pub fn get_screen_coords(&self, x: TileCoord, y: TileCoord) -> (usize, usize, usize) {
+    pub fn get_screen_coords(&self, x: TileCoord, y: TileCoord) -> Result<(usize, usize, usize)> {
+        if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
+            bail!("out of range");
+        }
         let screen_x = (x / 32) as usize;
         let screen_y = (y / 32) as usize;
         let screen_i = screen_y * self.size.0 as usize + screen_x;
-        (screen_i, (x % 32) as usize, (y % 32) as usize)
+        Ok((screen_i, (x % 32) as usize, (y % 32) as usize))
     }
 
-    pub fn get_palette(&self, x: TileCoord, y: TileCoord) -> PaletteId {
-        let (i, sx, sy) = self.get_screen_coords(x, y);
-        self.screens[i].palettes[sy][sx]
+    pub fn get_palette(&self, x: TileCoord, y: TileCoord) -> Result<PaletteId> {
+        let (i, sx, sy) = self.get_screen_coords(x, y)?;
+        Ok(self.screens[i].palettes[sy][sx])
     }
 
-    pub fn get_tile(&self, x: TileCoord, y: TileCoord) -> TileIdx {
-        let (i, sx, sy) = self.get_screen_coords(x, y);
-        self.screens[i].tiles[sy][sx]
+    pub fn get_tile(&self, x: TileCoord, y: TileCoord) -> Result<TileIdx> {
+        let (i, sx, sy) = self.get_screen_coords(x, y)?;
+        Ok(self.screens[i].tiles[sy][sx])
     }
 
-    pub fn get_flip(&self, x: TileCoord, y: TileCoord) -> Flip {
-        let (i, sx, sy) = self.get_screen_coords(x, y);
-        self.screens[i].flips[sy][sx]
+    pub fn get_flip(&self, x: TileCoord, y: TileCoord) -> Result<Flip> {
+        let (i, sx, sy) = self.get_screen_coords(x, y)?;
+        Ok(self.screens[i].flips[sy][sx])
     }
 
-    pub fn set_tile(&mut self, x: TileCoord, y: TileCoord, tile_idx: TileIdx) {
-        if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
-            return;
-        }
-        let (i, sx, sy) = self.get_screen_coords(x, y);
+    pub fn set_tile(&mut self, x: TileCoord, y: TileCoord, tile_idx: TileIdx) -> Result<()> {
+        let (i, sx, sy) = self.get_screen_coords(x, y)?;
         self.screens[i].tiles[sy][sx] = tile_idx;
+        Ok(())
     }
 
-    pub fn set_palette(&mut self, x: TileCoord, y: TileCoord, palette_id: PaletteId) {
-        if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
-            return;
-        }
-        let (i, sx, sy) = self.get_screen_coords(x, y);
+    pub fn set_palette(&mut self, x: TileCoord, y: TileCoord, palette_id: PaletteId) -> Result<()> {
+        let (i, sx, sy) = self.get_screen_coords(x, y)?;
         self.screens[i].palettes[sy][sx] = palette_id;
+        Ok(())
     }
 
-    pub fn set_flip(&mut self, x: TileCoord, y: TileCoord, flip: Flip) {
-        if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
-            return;
-        }
-        let (i, sx, sy) = self.get_screen_coords(x, y);
+    pub fn set_flip(&mut self, x: TileCoord, y: TileCoord, flip: Flip) -> Result<()> {
+        let (i, sx, sy) = self.get_screen_coords(x, y)?;
         self.screens[i].flips[sy][sx] = flip;
+        Ok(())
     }
 }
 
@@ -200,7 +200,7 @@ pub enum Dialogue {
     DeleteTheme,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TileBlock {
     pub size: (TileCoord, TileCoord),
     pub palettes: Vec<Vec<PaletteId>>,
@@ -233,6 +233,10 @@ pub struct EditorState {
     pub area: Area,
     pub area_names: Vec<String>,
     pub theme_names: Vec<String>,
+
+    // Undo functionality:
+    pub undo_stack: Vec<(Message, Message)>,
+    pub redo_stack: Vec<(Message, Message)>,
 
     // Settings-related data:
     pub rom_path: Option<PathBuf>,
@@ -335,6 +339,8 @@ pub fn get_initial_state() -> Result<EditorState> {
         area: Area::default(),
         area_names: vec![],
         theme_names: vec![],
+        undo_stack: vec![],
+        redo_stack: vec![],
         brush_mode: false,
         focus: Focus::None,
         palette_idx: 0,

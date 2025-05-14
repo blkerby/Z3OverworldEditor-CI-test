@@ -16,8 +16,7 @@ use crate::{
     helpers::{alpha_blend, scale_color},
     message::{Message, SelectionSource},
     state::{
-        Area, ColorIdx, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord,
-        TileIdx,
+        Area, ColorIdx, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord, TileIdx,
     },
 };
 
@@ -95,14 +94,16 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                     if let Some(p) = cursor.position_over(bounds) {
                         if self.brush_mode {
                             state.action = InternalStateAction::Brushing;
+                            let coords =
+                                clamped_position_in(p, bounds, self.area.size, self.pixel_size);
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::AreaBrush(clamped_position_in(
-                                    p,
-                                    bounds,
-                                    self.area.size,
-                                    self.pixel_size,
-                                ))),
+                                Some(Message::AreaBrush {
+                                    area: self.area.name.clone(),
+                                    theme: self.area.theme.clone(),
+                                    coords,
+                                    selection: self.tile_block.clone(),
+                                }),
                             );
                         } else {
                             state.action = InternalStateAction::Selecting;
@@ -148,14 +149,16 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         }
                     } else if self.brush_mode && state.action == InternalStateAction::Brushing {
                         if let Some(p) = cursor.position() {
+                            let coords =
+                                clamped_position_in(p, bounds, self.area.size, self.pixel_size);
                             return (
                                 canvas::event::Status::Captured,
-                                Some(Message::AreaBrush(clamped_position_in(
-                                    p,
-                                    bounds,
-                                    self.area.size,
-                                    self.pixel_size,
-                                ))),
+                                Some(Message::AreaBrush {
+                                    area: self.area.name.clone(),
+                                    theme: self.area.theme.clone(),
+                                    coords,
+                                    selection: self.tile_block.clone(),
+                                }),
                             );
                         }
                     }
@@ -165,8 +168,8 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                     if let Some(p) = cursor.position_over(bounds) {
                         let coords =
                             clamped_position_in(p, bounds, self.area.size, self.pixel_size);
-                        let palette_id = self.area.get_palette(coords.x, coords.y);
-                        let tile_idx = self.area.get_tile(coords.x, coords.y);
+                        let palette_id = self.area.get_palette(coords.x, coords.y).unwrap();
+                        let tile_idx = self.area.get_tile(coords.x, coords.y).unwrap();
                         return (
                             canvas::event::Status::Captured,
                             Some(Message::OpenTile {
@@ -530,6 +533,10 @@ pub fn area_controls(state: &EditorState) -> Element<Message> {
 }
 
 pub fn add_area_view(name: &String, size: (u8, u8)) -> Element<Message> {
+    let add_area_msg = Message::AddArea {
+        name: name.clone(),
+        size,
+    };
     container(
         column![
             text("Add a new area."),
@@ -538,7 +545,7 @@ pub fn add_area_view(name: &String, size: (u8, u8)) -> Element<Message> {
                 text_input("", name)
                     .id("AddArea")
                     .on_input(Message::SetAddAreaName)
-                    .on_submit(Message::AddArea)
+                    .on_submit(add_area_msg.clone())
             ]
             .spacing(10)
             .align_y(Vertical::Center),
@@ -546,17 +553,17 @@ pub fn add_area_view(name: &String, size: (u8, u8)) -> Element<Message> {
                 text("Size: ").width(70),
                 number_input(&size.0, 1..=8, Message::SetAddAreaSizeX)
                     .width(50)
-                    .on_submit(Message::AddArea),
+                    .on_submit(add_area_msg.clone()),
                 text(" by "),
                 number_input(&size.1, 1..=8, Message::SetAddAreaSizeY)
                     .width(50)
-                    .on_submit(Message::AddArea),
+                    .on_submit(add_area_msg.clone()),
             ]
             .spacing(10)
             .align_y(Vertical::Center),
             button(text("Add area"))
                 .style(button::success)
-                .on_press(Message::AddArea),
+                .on_press(add_area_msg.clone()),
         ]
         .spacing(10),
     )
@@ -569,6 +576,10 @@ pub fn add_area_view(name: &String, size: (u8, u8)) -> Element<Message> {
 pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Message> {
     let old_name = state.area.name.clone();
     let rgb_width = 80;
+    let edit_area_msg = Message::EditArea {
+        old_name: old_name.clone(),
+        new_name: name.clone(),
+    };
     container(
         column![
             text(format!("Edit area \"{}\"", old_name)),
@@ -577,7 +588,7 @@ pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Me
                 text_input("", name)
                     .id("EditArea")
                     .on_input(Message::SetEditAreaName)
-                    .on_submit(Message::EditArea)
+                    .on_submit(edit_area_msg.clone())
             ]
             .spacing(10)
             .align_y(Vertical::Center),
@@ -598,7 +609,7 @@ pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Me
             .spacing(5)
             .align_y(iced::alignment::Vertical::Center),
             row![
-                button(text("Edit area")).on_press(Message::EditArea),
+                button(text("Edit area")).on_press(edit_area_msg.clone()),
                 Space::with_width(Length::Fill),
                 button(text("Delete area"))
                     .style(button::danger)
@@ -619,9 +630,10 @@ pub fn delete_area_view(state: &EditorState) -> Element<Message> {
         column![
             text(format!("Delete area \"{}\"?", name)),
             text("This will delete the area across all themes."),
+            text("This action cannot be undone."),
             button(text("Delete area"))
                 .style(button::danger)
-                .on_press(Message::DeleteArea),
+                .on_press(Message::DeleteArea(name.clone())),
         ]
         .spacing(10),
     )
@@ -640,13 +652,13 @@ pub fn add_theme_view(name: &String) -> Element<Message> {
                 text_input("", name)
                     .id("AddTheme")
                     .on_input(Message::SetAddThemeName)
-                    .on_submit(Message::AddTheme)
+                    .on_submit(Message::AddTheme(name.clone()))
             ]
             .spacing(10)
             .align_y(Vertical::Center),
             button(text("Add theme"))
                 .style(button::success)
-                .on_press(Message::AddTheme),
+                .on_press(Message::AddTheme(name.clone())),
         ]
         .spacing(10),
     )
@@ -658,6 +670,10 @@ pub fn add_theme_view(name: &String) -> Element<Message> {
 
 pub fn rename_theme_view(state: &EditorState, name: &String) -> Element<'static, Message> {
     let old_name = state.area.theme.clone();
+    let rename_msg = Message::RenameTheme {
+        old_name: old_name.clone(),
+        new_name: name.clone(),
+    };
     container(
         column![
             text(format!("Rename theme \"{}\"", old_name)),
@@ -666,12 +682,12 @@ pub fn rename_theme_view(state: &EditorState, name: &String) -> Element<'static,
                 text_input("", name)
                     .id("RenameTheme")
                     .on_input(Message::SetRenameThemeName)
-                    .on_submit(Message::RenameTheme)
+                    .on_submit(rename_msg.clone())
             ]
             .spacing(10)
             .align_y(Vertical::Center),
             row![
-                button(text("Rename theme")).on_press(Message::RenameTheme),
+                button(text("Rename theme")).on_press(rename_msg.clone()),
                 Space::with_width(Length::Fill),
                 button(text("Delete theme"))
                     .style(button::danger)
@@ -692,9 +708,10 @@ pub fn delete_theme_view(state: &EditorState) -> Element<Message> {
         column![
             text(format!("Delete theme \"{}\"?", theme)),
             text("This will delete the theme across all areas."),
+            text("This action cannot be undone."),
             button(text("Delete theme"))
                 .style(button::danger)
-                .on_press(Message::DeleteTheme),
+                .on_press(Message::DeleteTheme(theme.clone())),
         ]
         .spacing(10),
     )

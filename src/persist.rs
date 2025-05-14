@@ -335,8 +335,8 @@ pub fn copy_area_theme(
     Ok(())
 }
 
-pub fn rename_area(state: &mut EditorState, new_name: &str) -> Result<()> {
-    let old_area_path = get_area_dir(state)?.join(&state.area.name);
+pub fn rename_area(state: &mut EditorState, old_name: &str, new_name: &str) -> Result<()> {
+    let old_area_path = get_area_dir(state)?.join(old_name);
     let new_area_path = get_area_dir(state)?.join(new_name);
     info!(
         "Renaming {} to {} (directory)",
@@ -391,11 +391,11 @@ pub fn _remap_tiles(
             load_area(state, area_name, theme_name)?;
             for y in 0..state.area.size.1 as u16 * 32 {
                 for x in 0..state.area.size.0 as u16 * 32 {
-                    let pal = state.area.get_palette(x, y);
-                    let tile_idx = state.area.get_tile(x, y);
+                    let pal = state.area.get_palette(x, y).unwrap();
+                    let tile_idx = state.area.get_tile(x, y).unwrap();
                     if let Some(&(p1, t1)) = map.get(&(pal, tile_idx)) {
-                        state.area.set_palette(x, y, p1);
-                        state.area.set_tile(x, y, t1);
+                        state.area.set_palette(x, y, p1).unwrap();
+                        state.area.set_tile(x, y, t1).unwrap();
                         state.area.modified = true;
                     }
                 }
@@ -423,5 +423,8 @@ pub fn load_project(state: &mut EditorState) -> Result<()> {
         &state.area_names[0].clone(),
         &state.theme_names[0].clone(),
     )?;
+    state.palette_idx = 0;
+    state.color_idx = None;
+    state.tile_idx = None;
     Ok(())
 }
