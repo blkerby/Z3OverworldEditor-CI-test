@@ -2,14 +2,14 @@
 use iced::{
     alignment::Vertical,
     mouse,
-    widget::{canvas, checkbox, column, horizontal_space, pick_list, row, text, Column},
-    Element, Padding, Size,
+    widget::{canvas, column, horizontal_space, pick_list, row, text, Column},
+    Element, Size,
 };
 use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{ColorRGB, EditorState, Flip, PixelCoord, Tile},
+    state::{ColorRGB, EditorState, PixelCoord, Tile},
 };
 
 #[derive(Debug)]

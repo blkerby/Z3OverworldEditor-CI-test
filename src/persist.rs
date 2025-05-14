@@ -380,7 +380,7 @@ pub fn delete_area_theme(state: &mut EditorState, area_name: &str, theme: &str) 
     Ok(())
 }
 
-pub fn remap_tiles(
+pub fn _remap_tiles(
     state: &mut EditorState,
     map: &HashMap<(PaletteId, TileIdx), (PaletteId, TileIdx)>,
 ) -> Result<()> {

@@ -62,7 +62,7 @@ pub fn settings_view(state: &EditorState) -> Element<Message> {
     .into()
 }
 
-pub fn import_rom_confirm_view(state: &EditorState) -> Element<Message> {
+pub fn import_rom_confirm_view(_state: &EditorState) -> Element<Message> {
     container(
         column![
             text("Import project from ROM?"),
@@ -87,7 +87,7 @@ pub fn import_rom_confirm_view(state: &EditorState) -> Element<Message> {
     .into()
 }
 
-pub fn import_rom_progress_view(state: &EditorState) -> Element<Message> {
+pub fn import_rom_progress_view(_state: &EditorState) -> Element<Message> {
     container(text("Please wait while ROM is importing."))
         .width(350)
         .padding(25)

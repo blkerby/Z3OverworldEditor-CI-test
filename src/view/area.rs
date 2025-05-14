@@ -11,13 +11,12 @@ use iced::{
     Element, Length, Padding, Point, Rectangle, Size,
 };
 use iced_aw::number_input;
-use log::info;
 
 use crate::{
     helpers::{alpha_blend, scale_color},
     message::{Message, SelectionSource},
     state::{
-        Area, ColorIdx, ColorRGB, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord,
+        Area, ColorIdx, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord,
         TileIdx,
     },
 };

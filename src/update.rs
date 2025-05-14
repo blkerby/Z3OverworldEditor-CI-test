@@ -13,7 +13,7 @@ use crate::{
         load_area_list, rename_area, rename_area_theme, save_area,
     },
     state::{
-        Area, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile, TileBlock, TileCoord,
+        Area, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile, TileBlock,
         TileIdx, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
     },
     view::{open_project, open_rom},

@@ -8,12 +8,11 @@ use iced::{
     },
     Element, Length, Point, Rectangle, Size,
 };
-use log::info;
 
 use crate::{
     helpers::{alpha_blend, scale_color},
     message::{Message, SelectionSource},
-    state::{ColorIdx, EditorState, Palette, TileCoord, TileIdx},
+    state::{ColorIdx, EditorState, Palette, TileCoord},
 };
 
 // We use two separate canvases: one for drawing the tile raster and one for the tile selection.
@@ -166,7 +165,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
 
     fn draw(
         &self,
-        state: &InternalState,
+        _state: &InternalState,
         renderer: &iced::Renderer,
         _theme: &iced::Theme,
         bounds: iced::Rectangle,

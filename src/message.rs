@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use iced::Point;
 
 use crate::state::{
-    CollisionType, ColorIdx, ColorValue, Flip, Focus, PaletteId, PixelCoord, TileCoord, TileIdx,
+    CollisionType, ColorIdx, ColorValue, Focus, PaletteId, PixelCoord, TileCoord, TileIdx,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

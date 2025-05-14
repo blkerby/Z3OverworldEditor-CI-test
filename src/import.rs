@@ -1,4 +1,4 @@
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Result};
 use hashbrown::{hash_map::Entry, HashMap};
 use itertools::Itertools;
 use log::{info, warn};
@@ -10,11 +10,11 @@ use std::{
 
 use crate::{
     persist::{
-        load_area, load_project, remap_tiles, save_area, save_area_json, save_area_png,
+        load_area, load_project, save_area_json, save_area_png,
         save_project,
     },
     state::{
-        Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile, TileIdx,
+        Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile,
     },
     update::update_palette_order,
 };
@@ -269,16 +269,6 @@ impl Rom {
         Rom { data }
     }
 
-    pub fn resize(&mut self, new_size: usize) {
-        self.data.resize(new_size, 0xFF);
-    }
-
-    pub fn load(path: &Path) -> Result<Self> {
-        let data = std::fs::read(path)
-            .with_context(|| format!("Unable to load ROM at path {}", path.display()))?;
-        Ok(Rom::new(data))
-    }
-
     pub fn read_u8(&self, addr: PcAddr) -> Result<u8> {
         ensure!(
             (addr.0 as usize) < self.data.len(),
@@ -315,56 +305,6 @@ impl Rom {
         );
         Ok(&self.data[addr.0 as usize..(addr.0 as usize + n)])
     }
-
-    // pub fn save(&self, path: &Path) -> Result<()> {
-    //     std::fs::write(path, &self.data)
-    //         .with_context(|| format!("Unable to save ROM at path {}", path.display()))?;
-    //     Ok(())
-    // }
-
-    // pub fn write_u8(&mut self, addr: usize, x: isize) -> Result<()> {
-    //     ensure!(
-    //         addr + 1 <= self.data.len(),
-    //         "write_u8 address out of bounds"
-    //     );
-    //     ensure!(x >= 0 && x <= 0xFF, "write_u8 data does not fit");
-    //     self.data[addr] = x as u8;
-    //     Ok(())
-    // }
-
-    // pub fn write_u16(&mut self, addr: usize, x: isize) -> Result<()> {
-    //     ensure!(
-    //         addr + 2 <= self.data.len(),
-    //         "write_u16 address out of bounds"
-    //     );
-    //     ensure!(x >= 0 && x <= 0xFFFF, "write_u16 data does not fit");
-    //     self.write_u8(addr, x & 0xFF)?;
-    //     self.write_u8(addr + 1, x >> 8)?;
-    //     Ok(())
-    // }
-
-    // pub fn write_u24(&mut self, addr: usize, x: isize) -> Result<()> {
-    //     ensure!(
-    //         addr + 3 <= self.data.len(),
-    //         "write_u24 address out of bounds"
-    //     );
-    //     ensure!(x >= 0 && x <= 0xFFFFFF, "write_u24 data does not fit");
-    //     self.write_u8(addr, x & 0xFF)?;
-    //     self.write_u8(addr + 1, (x >> 8) & 0xFF)?;
-    //     self.write_u8(addr + 2, x >> 16)?;
-    //     Ok(())
-    // }
-
-    // pub fn write_n(&mut self, addr: usize, x: &[u8]) -> Result<()> {
-    //     ensure!(
-    //         addr + x.len() <= self.data.len(),
-    //         "write_n address out of bounds"
-    //     );
-    //     for i in 0..x.len() {
-    //         self.write_u8(addr + i, x[i] as isize)?;
-    //     }
-    //     Ok(())
-    // }
 }
 
 impl<'a> Importer<'a> {
