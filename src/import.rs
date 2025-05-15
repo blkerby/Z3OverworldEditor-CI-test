@@ -105,7 +105,8 @@ struct Constants {
     map_high_addr: SnesAddr,
     map_low_addr: SnesAddr,
     map_cnt: u32,
-    map_pal_set_addr: SnesAddr,
+    custom_map_main_pal_set_addr: Option<SnesAddr>,
+    map_aux_pal_set_addr: SnesAddr,
     special_map_pal_set_addr: SnesAddr,
     pal_set_addr: SnesAddr,
     global_gfx_set_addr: SnesAddr,
@@ -136,7 +137,8 @@ impl Constants {
             map_high_addr: SnesAddr(0x02F6B1),
             map_low_addr: SnesAddr(0x02F891),
             map_cnt: 160,
-            map_pal_set_addr: SnesAddr(0x00FD1C),
+            custom_map_main_pal_set_addr: None,
+            map_aux_pal_set_addr: SnesAddr(0x00FD1C),
             special_map_pal_set_addr: SnesAddr(0x02E595),
             pal_set_addr: SnesAddr(0x0CFE74),
             global_gfx_set_addr: SnesAddr(0x00E0B3),
@@ -167,7 +169,8 @@ impl Constants {
             map_high_addr: SnesAddr(0x02F94D),
             map_low_addr: SnesAddr(0x02FB2D),
             map_cnt: 160,
-            map_pal_set_addr: SnesAddr(0x00FD1C),
+            custom_map_main_pal_set_addr: None,
+            map_aux_pal_set_addr: SnesAddr(0x00FD1C),
             special_map_pal_set_addr: SnesAddr(0x02E831),
             pal_set_addr: SnesAddr(0x0ED504),
             global_gfx_set_addr: SnesAddr(0x00E073),
@@ -194,7 +197,10 @@ impl Constants {
                 info!("Using custom GFX table.");
                 constants.custom_gfx_set_addr = Some(SnesAddr(0x288480));
             }
-
+            if rom.read_u8(SnesAddr(0x288141).into())? != 0 {
+                info!("Using custom main palette table.");
+                constants.custom_map_main_pal_set_addr = Some(SnesAddr(0x288160));
+            }
             Ok(constants)
         } else if rom.read_u16(SnesAddr(0x00E7D2).into())? == 0xCA85 {
             info!("JP ROM format detected.");
@@ -605,16 +611,20 @@ impl<'a> Importer<'a> {
     fn load_map_palettes(&mut self) -> Result<()> {
         let rom = &self.rom;
         for i in 0..self.constants.map_cnt as usize {
-            let main = match i {
-                3 | 5 | 7 => 2,          // Light World: death mountain
-                0..0x40 => 0,            // Rest of Light World
-                0x43 | 0x45 | 0x47 => 3, // Dark World: death mountain
-                0x40..0x80 => 1,         // Rest of Dark World
-                0x88 => 4,               // Triforce room
-                0x80..0xA0 => 0,         // Special World
-                _ => panic!("internal error"),
-            };
             let parent = self.map_parents[i];
+            let main = if let Some(main_pal_addr) = self.constants.custom_map_main_pal_set_addr {
+                rom.read_u8((main_pal_addr + parent as u32).into())?
+            } else {
+                match i {
+                    3 | 5 | 7 => 2,          // Light World: death mountain
+                    0..0x40 => 0,            // Rest of Light World
+                    0x43 | 0x45 | 0x47 => 3, // Dark World: death mountain
+                    0x40..0x80 => 1,         // Rest of Dark World
+                    0x88 => 4,               // Triforce room
+                    0x80..0xA0 => 0,         // Special World
+                    _ => panic!("internal error"),
+                }
+            };
             let pal_set = if i == 0x88 {
                 0
             } else if parent >= 0x80 {
@@ -622,22 +632,27 @@ impl<'a> Importer<'a> {
                     (self.constants.special_map_pal_set_addr + (parent as u32 - 0x80)).into(),
                 )?
             } else {
-                rom.read_u8((self.constants.map_pal_set_addr + parent as u32).into())?
+                rom.read_u8((self.constants.map_aux_pal_set_addr + parent as u32).into())?
+            };
+            let prev_pal_set = if parent >= 1 {
+                rom.read_u8((self.constants.map_aux_pal_set_addr + (parent - 1) as u32).into())?
+            } else {
+                0
             };
             let pal_set_addr = self.constants.pal_set_addr + pal_set as u32 * 4;
             let mut aux1 = rom.read_u8(pal_set_addr.into())?;
             let mut aux2 = rom.read_u8((pal_set_addr + 1).into())?;
             let mut animated = rom.read_u8((pal_set_addr + 2).into())?;
             if aux1 >= 20 {
-                warn!("out-of-range aux1: {}", aux1);
+                warn!("{:02X}: out-of-range aux1: {}", i, aux1);
                 aux1 = 0;
             }
             if aux2 >= 20 {
-                warn!("out-of-range aux2: {}", aux2);
-                aux2 = 0;
+                aux2 = rom
+                    .read_u8((self.constants.pal_set_addr + prev_pal_set as u32 * 4 + 1).into())?;
             }
             if animated >= 14 {
-                warn!("out-of-range animated: {}", animated);
+                warn!("{:02X}: out-of-range animated: {}", i, animated);
                 animated = 0;
             }
             self.map_palettes.push(MapPalettes {
