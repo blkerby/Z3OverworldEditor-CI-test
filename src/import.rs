@@ -115,6 +115,7 @@ struct Constants {
     custom_gfx_set_addr: Option<SnesAddr>,
     special_gfx_set_addr: SnesAddr,
     tile_types: SnesAddr,
+    custom_bg_colors_addr: Option<SnesAddr>,
 }
 
 impl Constants {
@@ -147,6 +148,7 @@ impl Constants {
             custom_gfx_set_addr: None,
             special_gfx_set_addr: SnesAddr(0x02E585), // appears incorrect in ZS?
             tile_types: SnesAddr(0x0FFD94),
+            custom_bg_colors_addr: None,
         }
     }
 
@@ -179,6 +181,7 @@ impl Constants {
             custom_gfx_set_addr: None,
             special_gfx_set_addr: SnesAddr(0x02E821),
             tile_types: SnesAddr(0x0E9459),
+            custom_bg_colors_addr: None,
         }
     }
 
@@ -200,6 +203,10 @@ impl Constants {
             if rom.read_u8(SnesAddr(0x288141).into())? != 0 {
                 info!("Using custom main palette table.");
                 constants.custom_map_main_pal_set_addr = Some(SnesAddr(0x288160));
+            }
+            if rom.read_u8(SnesAddr(0x288140).into())? != 0 {
+                info!("Using custom BG colors.");
+                constants.custom_bg_colors_addr = Some(SnesAddr(0x288000));
             }
             Ok(constants)
         } else if rom.read_u16(SnesAddr(0x00E7D2).into())? == 0xCA85 {
@@ -674,26 +681,24 @@ impl<'a> Importer<'a> {
         let special_gfx_set_addr = self.constants.special_gfx_set_addr;
         for i in 0..self.constants.map_cnt as usize {
             let parent = self.map_parents[i];
-            let mut gfx: Vec<u8>;
+            let global_idx = match parent {
+                0x40..0x80 => 0x21, // Dark World
+                0x88 => 0x24,       // Triforce room
+                _ => 0x20,          // Light World
+            };
+            let mut gfx: Vec<u8> = rom
+                .read_n((global_gfx_set_addr + global_idx * 8).into(), 8)?
+                .to_owned();
             if let Some(custom_gfx_set_addr) = self.constants.custom_gfx_set_addr {
-                gfx = rom
+                let local_gfx = rom
                     .read_n((custom_gfx_set_addr + parent as u32 * 8).into(), 8)?
                     .to_owned();
-                let default_gfx = [0x3A, 0x3B, 0x3C, 0x3D, 0x53, 0x4D, 0x3E, 0x5B];
-                for i in 0..gfx.len() {
-                    if gfx[i] == 0xff {
-                        gfx[i] = default_gfx[i];
+                for i in 0..8 {
+                    if local_gfx[i] != 0xff {
+                        gfx[i] = local_gfx[i];
                     }
                 }
             } else {
-                let global_idx = match parent {
-                    0x40..0x80 => 0x21, // Dark World
-                    0x88 => 0x24,       // Triforce room
-                    _ => 0x20,          // Light World
-                };
-                gfx = rom
-                    .read_n((global_gfx_set_addr + global_idx * 8).into(), 8)?
-                    .to_owned();
                 let local_idx = match parent {
                     0x88 => 81,
                     0x80.. => {
@@ -763,10 +768,22 @@ impl<'a> Importer<'a> {
                 .copy_from_slice(&((animated_gfx * 64)..(animated_gfx * 64 + 32)).collect_vec());
 
             let pal = &self.map_palettes[parent];
-            let bg_color = match parent {
-                0x40..0x80 => [18, 17, 10],       // dark world
-                0x80 | 0x82 | 0x83 => [6, 14, 6], // dark green background (Special World)
-                _ => [9, 19, 9],                  // default green background
+            let bg_color = if let Some(custom_bg_colors_addr) = self.constants.custom_bg_colors_addr
+            {
+                let c = self
+                    .rom
+                    .read_u16((custom_bg_colors_addr + parent as u32 * 2).into())?;
+                [
+                    (c & 31) as u8,
+                    ((c >> 5) & 31) as u8,
+                    ((c >> 10) & 31) as u8,
+                ]
+            } else {
+                match parent {
+                    0x40..0x80 => [18, 17, 10],       // dark world
+                    0x80 | 0x82 | 0x83 => [6, 14, 6], // dark green background (Special World)
+                    _ => [9, 19, 9],                  // default green background
+                }
             };
             let mut area: Area = Area {
                 modified: false,
