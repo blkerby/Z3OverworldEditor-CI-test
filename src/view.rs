@@ -16,7 +16,7 @@ use iced::{
     Element, Length, Theme,
 };
 use iced_aw::quad;
-use palette::{add_palette_view, delete_palette_view, palette_view, rename_palette_view};
+use palette::{add_palette_view, delete_palette_view, rename_palette_view, selected_palette_view, used_palettes_view};
 use settings::{import_rom_confirm_view, import_rom_progress_view, settings_view};
 use tiles::tile_view;
 
@@ -113,7 +113,13 @@ pub fn view(state: &EditorState) -> Element<Message> {
         .padding(10)
         .spacing(10),
         vertical_separator(),
-        column![palette_view(state), graphics_view(state), tile_view(state),].width(420)
+        column![
+            used_palettes_view(state),
+            selected_palette_view(state),
+            graphics_view(state),
+            tile_view(state),
+        ]
+        .width(420)
     ]
     .spacing(0)
     .width(Length::Fill)

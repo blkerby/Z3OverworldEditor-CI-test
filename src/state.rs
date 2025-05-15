@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use log::info;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::PathBuf;
@@ -13,7 +13,8 @@ use crate::{
 
 pub type ColorValue = u8; // Color value (0-31)
 pub type ColorIdx = u8; // Index into 4bpp palette (0-15)
-pub type PaletteId = u16; // ID of the palette
+pub type PaletteId = u16; // external ID of the palette
+pub type PaletteIdx = usize; // internal ID of the palette (index into State.palettes)
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type TileCoord = u16; // Index into area: number of 8x8 tiles from top-left corner
@@ -183,6 +184,20 @@ impl Area {
         self.screens[i].flips[sy][sx] = flip;
         Ok(())
     }
+
+    pub fn get_unique_palettes(&self) -> Vec<PaletteId> {
+        let mut palettes: HashSet<PaletteId> = HashSet::new();
+        for s in &self.screens {
+            for y in 0..32 {
+                for x in 0..32 {
+                    palettes.insert(s.palettes[y][x]);
+                }
+            }
+        }
+        let mut palettes: Vec<PaletteId> = palettes.into_iter().collect();
+        palettes.sort();
+        palettes
+    }
 }
 
 pub enum Dialogue {
@@ -246,7 +261,7 @@ pub struct EditorState {
     pub brush_mode: bool,
 
     // Palette editing state:
-    pub palette_idx: usize,
+    pub palette_idx: PaletteIdx,
     pub color_idx: Option<ColorIdx>,
     pub selected_color: ColorRGB,
     pub identify_color: bool,

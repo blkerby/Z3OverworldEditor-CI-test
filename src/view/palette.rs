@@ -2,14 +2,16 @@
 use iced::{
     alignment::Vertical,
     mouse,
-    widget::{button, canvas, column, container, pick_list, row, text, text_input, Space},
+    widget::{
+        button, canvas, column, container, pick_list, row, text, text_input, Column, Row, Space,
+    },
     Element, Length, Size,
 };
 use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{ColorIdx, ColorRGB, EditorState, Focus, PaletteId},
+    state::{ColorIdx, ColorRGB, EditorState, Focus, PaletteId, PaletteIdx},
 };
 
 use super::modal_background_style;
@@ -24,6 +26,7 @@ struct ColorBox {
     brush_mode: bool,
     color_idx: ColorIdx,
     palette_id: PaletteId,
+    palette_idx: PaletteIdx,
     selected_color: ColorRGB,
 }
 
@@ -54,7 +57,7 @@ impl canvas::Program<Message> for ColorBox {
                                     color: self.selected_color,
                                 })
                             } else {
-                                Some(Message::SelectColor(self.color_idx))
+                                Some(Message::SelectColor(self.palette_idx, self.color_idx))
                             }
                         }
                         mouse::Button::Right => None,
@@ -134,7 +137,7 @@ impl canvas::Program<Message> for ColorBox {
     }
 }
 
-pub fn palette_view(state: &EditorState) -> Element<Message> {
+pub fn selected_palette_view(state: &EditorState) -> Element<Message> {
     let palette_names: Vec<String> = state
         .palettes
         .iter()
@@ -157,6 +160,7 @@ pub fn palette_view(state: &EditorState) -> Element<Message> {
                 brush_mode: state.brush_mode,
                 color_idx: i as ColorIdx,
                 palette_id: state.palettes[state.palette_idx].id,
+                palette_idx: state.palette_idx,
                 selected_color: state.selected_color,
             })
             .width(size)
@@ -305,4 +309,41 @@ pub fn delete_palette_view(state: &EditorState) -> Element<Message> {
     .padding(25)
     .style(modal_background_style)
     .into()
+}
+
+pub fn used_palettes_view(state: &EditorState) -> Element<Message> {
+    let mut col: Column<Message> = Column::new();
+    let palette_ids = state.area.get_unique_palettes();
+    for pal_id in palette_ids {
+        let Some(&palette_idx) = state.palettes_id_idx_map.get(&pal_id) else {
+            col = col.push(row![text(format!("{} (does not exist)", pal_id))]);
+            continue;
+        };
+        let mut row: Row<Message> = Row::new();
+        let pal = &state.palettes[palette_idx as usize];
+        row = row.push(text(pal.name.clone()).width(110));
+
+        let size = 18.0;
+        for i in 0..16 {
+            row = row.push(
+                canvas(ColorBox {
+                    r: pal.colors[i][0] as f32 / 31.0,
+                    g: pal.colors[i][1] as f32 / 31.0,
+                    b: pal.colors[i][2] as f32 / 31.0,
+                    thickness: 1.0,
+                    selected: state.palette_idx == palette_idx
+                        && Some(i as ColorIdx) == state.color_idx,
+                    brush_mode: state.brush_mode,
+                    color_idx: i as ColorIdx,
+                    palette_id: state.palettes[palette_idx].id,
+                    palette_idx,
+                    selected_color: state.selected_color,
+                })
+                .width(size)
+                .height(size),
+            );
+        }
+        col = col.push(row);
+    }
+    row![col].padding(10).into()
 }

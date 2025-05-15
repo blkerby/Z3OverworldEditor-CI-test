@@ -59,7 +59,7 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
             })
         }
         Message::HideModal => UndoAction::None,
-        Message::SelectColor(_) => UndoAction::None,
+        Message::SelectColor(_, _) => UndoAction::None,
         &Message::BrushColor {
             palette_id,
             color_idx,

@@ -1,5 +1,6 @@
 Some features still needed:
-- make sure importing a ZScream ROM works
+- show palettes used by room
+- used different key instead of CTRL for identifying tiles/colors
 - Swap tiles (within and between palettes), updating area data
 - Way to open a second area/scratch in side panel (instead of palette/tileset editor)
 - overlays

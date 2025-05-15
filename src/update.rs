@@ -589,10 +589,15 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
         Message::HideModal => {
             state.dialogue = None;
         }
-        &Message::SelectColor(idx) => {
-            let pal_idx = state.palette_idx;
-            state.color_idx = Some(idx);
-            state.selected_color = state.palettes[pal_idx].colors[idx as usize];
+        &Message::SelectColor(pal_idx, color_idx) => {
+            if pal_idx != state.palette_idx {
+                state.tile_idx = None;
+                state.start_coords = None;
+                state.end_coords = None;
+            }
+            state.palette_idx = pal_idx;
+            state.color_idx = Some(color_idx);
+            state.selected_color = state.palettes[pal_idx as usize].colors[color_idx as usize];
             state.focus = Focus::PaletteColor;
         }
         &Message::BrushColor {

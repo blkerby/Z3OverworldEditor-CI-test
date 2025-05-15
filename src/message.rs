@@ -3,8 +3,7 @@ use std::path::PathBuf;
 use iced::Point;
 
 use crate::state::{
-    CollisionType, ColorIdx, ColorRGB, ColorValue, Focus, Palette, PaletteId, PixelCoord, Tile,
-    TileBlock, TileCoord, TileIdx,
+    CollisionType, ColorIdx, ColorRGB, ColorValue, Focus, Palette, PaletteId, PaletteIdx, PixelCoord, Tile, TileBlock, TileCoord, TileIdx
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -46,7 +45,7 @@ pub enum Message {
         name: String,
     },
     HideModal,
-    SelectColor(ColorIdx),
+    SelectColor(PaletteIdx, ColorIdx),
     BrushColor {
         palette_id: PaletteId,
         color_idx: ColorIdx,
