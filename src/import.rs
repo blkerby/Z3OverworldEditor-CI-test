@@ -9,13 +9,8 @@ use std::{
 };
 
 use crate::{
-    persist::{
-        load_area, load_project, save_area_json, save_area_png,
-        save_project,
-    },
-    state::{
-        Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile,
-    },
+    persist::{load_area, load_project, save_area_json, save_area_png, save_project},
+    state::{Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile},
     update::update_palette_order,
 };
 
@@ -116,6 +111,7 @@ struct Constants {
     global_gfx_set_addr: SnesAddr,
     local_gfx_set_addr: SnesAddr,
     map_gfx_set_addr: SnesAddr,
+    custom_gfx_set_addr: Option<SnesAddr>,
     special_gfx_set_addr: SnesAddr,
     tile_types: SnesAddr,
 }
@@ -146,6 +142,7 @@ impl Constants {
             global_gfx_set_addr: SnesAddr(0x00E0B3),
             local_gfx_set_addr: SnesAddr(0x00DDD7),
             map_gfx_set_addr: SnesAddr(0x00FC9C),
+            custom_gfx_set_addr: None,
             special_gfx_set_addr: SnesAddr(0x02E585), // appears incorrect in ZS?
             tile_types: SnesAddr(0x0FFD94),
         }
@@ -176,13 +173,30 @@ impl Constants {
             global_gfx_set_addr: SnesAddr(0x00E073),
             local_gfx_set_addr: SnesAddr(0x0DD97),
             map_gfx_set_addr: SnesAddr(0x00FC9C),
+            custom_gfx_set_addr: None,
             special_gfx_set_addr: SnesAddr(0x02E821),
             tile_types: SnesAddr(0x0E9459),
         }
     }
 
     fn auto(rom: &Rom) -> Result<Self> {
-        if rom.read_u16(SnesAddr(0x00E7D2).into())? == 0xCA85 {
+        if rom.read_u24(SnesAddr(0x008865).into())? == 0xBD8000 {
+            info!("ZScream ROM format detected.");
+            let mut constants = Constants::us();
+            constants.tiles16_addr = SnesAddr(0xBD8000);
+            constants.tiles16_cnt = 4096;
+            constants.tiles32_tr_addr = SnesAddr(0x048000);
+            constants.tiles32_bl_addr = SnesAddr(0x3E8000);
+            constants.tiles32_br_addr = SnesAddr(0x3F8000);
+            constants.tiles32_cnt = 17728;
+
+            if rom.read_u8(SnesAddr(0x288148).into())? != 0 {
+                info!("Using custom GFX table.");
+                constants.custom_gfx_set_addr = Some(SnesAddr(0x288480));
+            }
+
+            Ok(constants)
+        } else if rom.read_u16(SnesAddr(0x00E7D2).into())? == 0xCA85 {
             info!("JP ROM format detected.");
             Ok(Constants::jp())
         } else if rom.read_u16(SnesAddr(0x00E792).into())? == 0xCA85 {
@@ -645,25 +659,43 @@ impl<'a> Importer<'a> {
         let special_gfx_set_addr = self.constants.special_gfx_set_addr;
         for i in 0..self.constants.map_cnt as usize {
             let parent = self.map_parents[i];
-            let global_idx = match parent {
-                0x40..0x80 => 0x21, // Dark World
-                0x88 => 0x24,       // Triforce room
-                _ => 0x20,          // Light World
-            };
-            let mut gfx: Vec<u8> = rom
-                .read_n((global_gfx_set_addr + global_idx * 8).into(), 8)?
-                .to_owned();
-            let local_idx = match parent {
-                0x88 => 81,
-                0x80.. => rom.read_u8((special_gfx_set_addr + (parent - 0x80) as u32).into())?,
-                _ => rom.read_u8((map_gfx_set_addr + parent as u32).into())?,
-            };
-            let local_gfx: &[u8] =
-                rom.read_n((local_gfx_set_addr + local_idx as u32 * 4).into(), 4)?;
-            for j in 0..4 {
-                if local_gfx[j] != 0 {
-                    gfx[3 + j] = local_gfx[j];
+            let mut gfx: Vec<u8>;
+            if let Some(custom_gfx_set_addr) = self.constants.custom_gfx_set_addr {
+                gfx = rom
+                    .read_n((custom_gfx_set_addr + parent as u32 * 8).into(), 8)?
+                    .to_owned();
+                let default_gfx = [0x3A, 0x3B, 0x3C, 0x3D, 0x53, 0x4D, 0x3E, 0x5B];
+                for i in 0..gfx.len() {
+                    if gfx[i] == 0xff {
+                        gfx[i] = default_gfx[i];
+                    }
                 }
+            } else {
+                let global_idx = match parent {
+                    0x40..0x80 => 0x21, // Dark World
+                    0x88 => 0x24,       // Triforce room
+                    _ => 0x20,          // Light World
+                };
+                gfx = rom
+                    .read_n((global_gfx_set_addr + global_idx * 8).into(), 8)?
+                    .to_owned();
+                let local_idx = match parent {
+                    0x88 => 81,
+                    0x80.. => {
+                        rom.read_u8((special_gfx_set_addr + (parent - 0x80) as u32).into())?
+                    }
+                    _ => rom.read_u8((map_gfx_set_addr + parent as u32).into())?,
+                };
+                let local_gfx: &[u8] =
+                    rom.read_n((local_gfx_set_addr + local_idx as u32 * 4).into(), 4)?;
+                for j in 0..4 {
+                    if local_gfx[j] != 0 {
+                        gfx[3 + j] = local_gfx[j];
+                    }
+                }
+            }
+            if i == 0x34 {
+                info!("gfx: {:x?}", gfx);
             }
             self.map_gfx.push(gfx.try_into().unwrap());
         }
@@ -940,7 +972,7 @@ fn decompress(rom: &Rom, mut addr: PcAddr, big_endian_offset: bool) -> Result<Ve
                 addr += 1;
                 for _ in 0..size {
                     out.push(b);
-                    b = b.saturating_add(1);
+                    b = b.wrapping_add(1);
                 }
             }
             4 => {

@@ -1,7 +1,6 @@
 Some features still needed:
 - make sure importing a ZScream ROM works
 - Swap tiles (within and between palettes), updating area data
-- Undo
 - Way to open a second area/scratch in side panel (instead of palette/tileset editor)
 - overlays
 - World editor
