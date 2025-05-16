@@ -10,7 +10,9 @@ use std::{
 
 use crate::{
     persist::{load_project, save_area_json, save_area_png, save_project},
-    state::{Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile},
+    state::{
+        Area, AreaId, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile,
+    },
     update::update_palette_order,
 };
 
@@ -382,7 +384,10 @@ impl<'a> Importer<'a> {
         save_project(self.state)?;
         load_project(self.state)?;
         for area_name in &self.state.area_names.clone() {
-            let area_id = ("Base".to_string(), area_name.clone());
+            let area_id = AreaId {
+                theme: "Base".to_string(),
+                area: area_name.clone(),
+            };
             self.state.load_area(&area_id)?;
             save_area_png(self.state, &area_id)?;
             self.state.areas.remove(&area_id);

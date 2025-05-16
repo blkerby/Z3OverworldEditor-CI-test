@@ -575,7 +575,7 @@ pub fn add_area_view(name: &String, size: (u8, u8)) -> Element<Message> {
         ]
         .spacing(10),
     )
-    .width(350)
+    .width(450)
     .padding(25)
     .style(modal_background_style)
     .into()
@@ -603,8 +603,12 @@ pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Me
             row![text("Background color:")],
             row![
                 text("Red"),
-                number_input(&state.main_area().bg_color[0], 0..=31, Message::EditAreaBGRed)
-                    .width(rgb_width),
+                number_input(
+                    &state.main_area().bg_color[0],
+                    0..=31,
+                    Message::EditAreaBGRed
+                )
+                .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Green"),
                 number_input(
@@ -653,7 +657,7 @@ pub fn delete_area_view(state: &EditorState) -> Element<Message> {
         ]
         .spacing(10),
     )
-    .width(350)
+    .width(450)
     .padding(25)
     .style(modal_background_style)
     .into()
@@ -678,7 +682,7 @@ pub fn add_theme_view(name: &String) -> Element<Message> {
         ]
         .spacing(10),
     )
-    .width(350)
+    .width(450)
     .padding(25)
     .style(modal_background_style)
     .into()
@@ -712,7 +716,7 @@ pub fn rename_theme_view(state: &EditorState, name: &String) -> Element<'static,
         ]
         .spacing(10),
     )
-    .width(350)
+    .width(450)
     .padding(25)
     .style(modal_background_style)
     .into()
@@ -731,7 +735,7 @@ pub fn delete_theme_view(state: &EditorState) -> Element<Message> {
         ]
         .spacing(10),
     )
-    .width(350)
+    .width(450)
     .padding(25)
     .style(modal_background_style)
     .into()

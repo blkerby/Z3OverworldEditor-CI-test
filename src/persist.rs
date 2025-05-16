@@ -219,13 +219,12 @@ pub fn load_area_list(state: &mut EditorState) -> Result<()> {
 }
 
 pub fn load_area(state: &EditorState, area_id: &AreaId) -> Result<Area> {
-    let (theme_name, area_name) = area_id;
     let area_path = get_area_dir(state)?
-        .join(area_name)
-        .join(format!("{}.json", theme_name));
+        .join(area_id.area.clone())
+        .join(format!("{}.json", area_id.theme));
     let mut area: Area = load_json(&area_path)?;
-    area.name = area_name.to_owned();
-    area.theme = theme_name.to_owned();
+    area.name = area_id.area.to_owned();
+    area.theme = area_id.theme.to_owned();
     Ok(area)
 }
 
@@ -300,9 +299,8 @@ pub fn save_area_png(state: &EditorState, area_id: &AreaId) -> Result<()> {
 
 pub fn save_area_json(state: &EditorState, area_id: &AreaId) -> Result<()> {
     let area_dir = get_area_dir(state)?;
-    let (theme_name, area_name) = area_id;
-    let area_json_filename = format!("{}.json", theme_name);
-    let area_json_path = area_dir.join(&area_name).join(area_json_filename);
+    let area_json_filename = format!("{}.json", area_id.theme);
+    let area_json_path = area_dir.join(&area_id.area).join(area_json_filename);
     save_json(&area_json_path, &state.areas[area_id])?;
     Ok(())
 }
@@ -343,6 +341,15 @@ pub fn rename_area(state: &mut EditorState, old_name: &str, new_name: &str) -> R
         new_area_path.display()
     );
     std::fs::rename(old_area_path, new_area_path)?;
+    let keys: Vec<AreaId> = state
+        .areas
+        .keys()
+        .filter(|x| x.area == old_name)
+        .cloned()
+        .collect();
+    for k in keys {
+        state.areas.remove(&k);
+    }
     Ok(())
 }
 
@@ -368,6 +375,15 @@ pub fn delete_area(state: &mut EditorState, name: &str) -> Result<()> {
     let area_path = get_area_dir(state)?.join(name);
     info!("Deleting {}", area_path.display());
     std::fs::remove_dir_all(area_path)?;
+    let keys: Vec<AreaId> = state
+        .areas
+        .keys()
+        .filter(|x| x.area == name)
+        .cloned()
+        .collect();
+    for k in keys {
+        state.areas.remove(&k);
+    }
     Ok(())
 }
 
@@ -376,6 +392,10 @@ pub fn delete_area_theme(state: &mut EditorState, area_name: &str, theme: &str) 
     let area_path = area_dir.join(format!("{}.json", theme));
     info!("Deleting {}", area_path.display());
     std::fs::remove_file(area_path)?;
+    state.areas.remove(&AreaId {
+        area: area_name.to_string(),
+        theme: theme.to_string(),
+    });
     Ok(())
 }
 
@@ -417,7 +437,10 @@ pub fn save_project(state: &mut EditorState) -> Result<()> {
 pub fn load_project(state: &mut EditorState) -> Result<()> {
     load_palettes(state)?;
     load_area_list(state)?;
-    let area_id = (state.theme_names[0].clone(), state.area_names[0].clone());
+    let area_id = AreaId {
+        area: state.area_names[0].clone(),
+        theme: state.theme_names[0].clone(),
+    };
     state.switch_area(AreaPosition::Main, &area_id)?;
     state.palette_idx = 0;
     state.color_idx = None;

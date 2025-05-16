@@ -13,8 +13,8 @@ use crate::{
         load_area_list, rename_area, rename_area_theme, save_area,
     },
     state::{
-        Area, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile, TileBlock,
-        TileIdx, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
+        Area, AreaId, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile,
+        TileBlock, TileIdx, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
     },
     undo::{get_undo_action, UndoAction},
     view::{open_project, open_rom},
@@ -251,16 +251,21 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 match state.focus {
                     Focus::None => {}
                     Focus::MainPickArea => {
-                        let (theme_name, area_name) = &state.main_area_id;
-                        if let Some(area_idx) = state.area_names.iter().position(|x| x == area_name)
+                        let area_id = &state.main_area_id;
+                        if let Some(area_idx) =
+                            state.area_names.iter().position(|x| x == &area_id.area)
                         {
                             if area_idx + 1 < state.area_names.len() {
-                                let area_id =
-                                    (theme_name.clone(), state.area_names[area_idx + 1].clone());
-                                state.set_area(AreaPosition::Main, load_area(state, &area_id)?)?;
+                                state.switch_area(
+                                    AreaPosition::Main,
+                                    &AreaId {
+                                        area: state.area_names[area_idx + 1].clone(),
+                                        theme: area_id.theme.clone(),
+                                    },
+                                )?;
                             }
                         } else {
-                            bail!("Area not found: {}", area_name);
+                            bail!("Area not found: {}", area_id.area);
                         }
                     }
                     Focus::MainPickTheme => {
@@ -307,16 +312,21 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 match state.focus {
                     Focus::None => {}
                     Focus::MainPickArea => {
-                        let (theme_name, area_name) = &state.main_area_id;
-                        if let Some(area_idx) = state.area_names.iter().position(|x| x == area_name)
+                        let area_id = &state.main_area_id;
+                        if let Some(area_idx) =
+                            state.area_names.iter().position(|x| x == &area_id.area)
                         {
                             if area_idx - 1 > 0 {
-                                let area_id =
-                                    (theme_name.clone(), state.area_names[area_idx - 1].clone());
-                                state.set_area(AreaPosition::Main, load_area(state, &area_id)?)?;
+                                state.switch_area(
+                                    AreaPosition::Main,
+                                    &AreaId {
+                                        area: state.area_names[area_idx - 1].clone(),
+                                        theme: area_id.theme.clone(),
+                                    },
+                                )?;
                             }
                         } else {
-                            bail!("Area not found: {}", area_name);
+                            bail!("Area not found: {}", area_id.area);
                         }
                     }
                     Focus::MainPickTheme => {
@@ -785,8 +795,14 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             pal.modified = true;
         }
         Message::SelectMainArea(name) => {
-            let (theme_name, _) = &state.main_area_id;
-            load_area(state, &(theme_name.clone(), name.clone()))?;
+            let area_id = &state.main_area_id;
+            state.switch_area(
+                AreaPosition::Main,
+                &AreaId {
+                    area: name.clone(),
+                    theme: area_id.theme.clone(),
+                },
+            )?;
         }
         Message::AddAreaDialogue => {
             state.dialogue = Some(Dialogue::AddArea {
@@ -852,9 +868,8 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             state.area_names.sort();
         }
         Message::EditAreaDialogue => {
-            let (_, area_name) = &state.main_area_id;
             state.dialogue = Some(Dialogue::EditArea {
-                name: area_name.clone(),
+                name: state.main_area_id.area.clone(),
             });
             return Ok(Some(iced::widget::text_input::focus("EditArea")));
         }
@@ -876,10 +891,17 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                     return Ok(None);
                 }
             }
+            let area_id = state.main_area_id.clone();
             if new_name != old_name {
                 rename_area(state, old_name, new_name)?;
                 load_area_list(state)?;
-                state.main_area_id.1 = new_name.clone();
+                state.switch_area(
+                    AreaPosition::Main,
+                    &AreaId {
+                        area: new_name.clone(),
+                        theme: area_id.theme.clone(),
+                    },
+                )?;
             }
             state.dialogue = None;
         }
@@ -919,21 +941,25 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 warn!("Not allowed to delete the last remaining area.");
                 return Ok(None);
             }
+            let theme = state.main_area().theme.clone();
             delete_area(state, name)?;
             load_area_list(state)?;
-            state.set_area(
+            state.switch_area(
                 AreaPosition::Main,
-                load_area(
-                    state,
-                    &(state.area_names[0].clone(), state.main_area().theme.clone()),
-                )?,
+                &AreaId {
+                    area: state.area_names[0].clone(),
+                    theme: theme,
+                },
             )?;
             state.dialogue = None;
         }
         &Message::SelectTheme(position, ref theme) => {
-            state.set_area(
+            state.switch_area(
                 position,
-                load_area(state, &(state.area(position).name.clone(), theme.clone()))?,
+                &AreaId {
+                    area: state.area(position).name.clone(),
+                    theme: theme.clone(),
+                },
             )?;
         }
         Message::AddThemeDialogue => {
@@ -964,9 +990,12 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             for area_name in &state.area_names.clone() {
                 copy_area_theme(state, area_name, &old_theme, &theme_name)?;
             }
-            state.set_area(
+            state.switch_area(
                 AreaPosition::Main,
-                load_area(state, &(theme_name.clone(), state.main_area().name.clone()))?,
+                &AreaId {
+                    area: state.main_area().name.clone(),
+                    theme: theme_name.clone(),
+                },
             )?;
             state.theme_names.push(theme_name.clone());
             state.theme_names.sort();
@@ -1000,9 +1029,12 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 rename_area_theme(state, area_name, old_name, new_name)?;
             }
             load_area_list(state)?;
-            state.set_area(
+            state.switch_area(
                 AreaPosition::Main,
-                load_area(state, &(new_name.clone(), state.main_area().name.clone()))?,
+                &AreaId {
+                    area: state.main_area().name.clone(),
+                    theme: new_name.clone(),
+                },
             )?;
             state.dialogue = None;
         }
@@ -1014,16 +1046,17 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 warn!("Not allowed to delete the last remaining theme.");
                 return Ok(None);
             }
+            let area = state.main_area().name.clone();
             for area_name in &state.area_names.clone() {
                 delete_area_theme(state, area_name, theme_name)?;
             }
             load_area_list(state)?;
-            state.set_area(
+            state.switch_area(
                 AreaPosition::Main,
-                load_area(
-                    state,
-                    &(state.main_area().name.clone(), state.theme_names[0].clone()),
-                )?,
+                &AreaId {
+                    area,
+                    theme: state.theme_names[0].clone(),
+                },
             )?;
             state.dialogue = None;
         }

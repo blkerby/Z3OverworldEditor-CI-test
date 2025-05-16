@@ -20,9 +20,14 @@ pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type TileCoord = u16; // Index into area: number of 8x8 tiles from top-left corner
 pub type AreaName = String;
 pub type ThemeName = String;
-pub type AreaId = (AreaName, ThemeName);
 pub type CollisionType = u8;
 pub type ColorRGB = [ColorValue; 3];
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct AreaId {
+    pub area: AreaName,
+    pub theme: ThemeName,
+}
 
 #[derive(Copy, Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Hash)]
 pub struct Tile {
@@ -146,7 +151,10 @@ pub struct Area {
 
 impl Area {
     pub fn id(&self) -> AreaId {
-        (self.theme.clone(), self.name.clone())
+        AreaId {
+            area: self.name.clone(),
+            theme: self.theme.clone(),
+        }
     }
 
     pub fn get_screen_coords(&self, x: TileCoord, y: TileCoord) -> Result<(usize, usize, usize)> {
@@ -463,8 +471,14 @@ pub fn get_initial_state() -> Result<EditorState> {
         rom_path: None,
         palettes: vec![],
         areas: HashMap::new(),
-        main_area_id: ("Base".to_string(), "Example".to_string()),
-        side_area_id: ("Base".to_string(), "Example".to_string()),
+        main_area_id: AreaId {
+            area: "Example".to_string(),
+            theme: "Base".to_string(),
+        },
+        side_area_id: AreaId {
+            area: "Example".to_string(),
+            theme: "Base".to_string(),
+        },
         area_names: vec![],
         theme_names: vec![],
         undo_stack: vec![],
