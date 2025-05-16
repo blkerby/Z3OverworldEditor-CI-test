@@ -306,7 +306,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                         if let Some(area_idx) =
                             state.area_names.iter().position(|x| x == &area_id.area)
                         {
-                            if area_idx - 1 > 0 {
+                            if area_idx > 0 {
                                 state.switch_area(
                                     position,
                                     &AreaId {
@@ -799,6 +799,12 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                     theme: area_id.theme.clone(),
                 },
             )?;
+            if let SelectionSource::Area(p) = state.selection_source {
+                if p == position {
+                    state.start_coords = None;
+                    state.end_coords = None;
+                }
+            }
         }
         Message::AddAreaDialogue => {
             state.dialogue = Some(Dialogue::AddArea {

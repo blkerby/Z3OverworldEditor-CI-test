@@ -9,9 +9,10 @@ use std::{
 };
 
 use crate::{
-    persist::{load_project, save_area_json, save_area_png, save_project},
+    persist::{load_area, load_project, save_area_json, save_area_png, save_project},
     state::{
-        Area, AreaId, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile,
+        Area, AreaId, AreaName, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId,
+        Screen, Tile,
     },
     update::update_palette_order,
 };
@@ -278,6 +279,8 @@ pub struct Importer<'a> {
     state: &'a mut EditorState,
     constants: Constants,
     rom: Rom,
+    theme: String,
+    area_name_by_map_id: HashMap<u8, AreaName>,
     hud_palette_ids: Vec<[PaletteId; 2]>,
     main_palette_ids: Vec<[PaletteId; 5]>,
     aux_palette_ids: Vec<[PaletteId; 3]>,
@@ -347,10 +350,13 @@ impl<'a> Importer<'a> {
     fn new(state: &'a mut EditorState, path: &Path) -> Result<Self> {
         let rom_bytes = std::fs::read(path)?;
         let rom = Rom::new(rom_bytes);
+        let theme = state.main_area().theme.clone();
         Ok(Self {
             state,
             constants: Constants::auto(&rom)?,
             rom,
+            theme,
+            area_name_by_map_id: HashMap::new(),
             hud_palette_ids: vec![],
             main_palette_ids: vec![],
             aux_palette_ids: vec![],
@@ -369,6 +375,7 @@ impl<'a> Importer<'a> {
 
     fn import_all(&mut self) -> Result<()> {
         let starting_palette_id = 100;
+        self.load_area_names()?;
         self.load_tile_types()?;
         self.import_all_palettes(starting_palette_id)?;
         self.load_graphics()?;
@@ -385,7 +392,7 @@ impl<'a> Importer<'a> {
         load_project(self.state)?;
         for area_name in &self.state.area_names.clone() {
             let area_id = AreaId {
-                theme: "Base".to_string(),
+                theme: self.theme.clone(),
                 area: area_name.clone(),
             };
             self.state.load_area(&area_id)?;
@@ -393,6 +400,17 @@ impl<'a> Importer<'a> {
             self.state.areas.remove(&area_id);
         }
         load_project(self.state)?; // Load again to open the first room.
+        Ok(())
+    }
+
+    fn load_area_names(&mut self) -> Result<()> {
+        for area_name in &self.state.area_names {
+            let area_id = AreaId { area: area_name.clone(), theme: self.theme.clone() };
+            let area = load_area(self.state, &area_id)?;
+            if let Some(id) = area.vanilla_map_id {
+                self.area_name_by_map_id.insert(id, area_name.clone());
+            }
+        }
         Ok(())
     }
 
@@ -741,8 +759,6 @@ impl<'a> Importer<'a> {
     fn load_areas(&mut self) -> Result<()> {
         let tile32_offsets = [(0, 0), (2, 0), (0, 2), (2, 2)];
         let tile16_offsets = [(0, 0), (1, 0), (0, 1), (1, 1)];
-        self.state.theme_names = vec!["Base".to_string()];
-        self.state.area_names.clear();
 
         let mut tile_lookup: Vec<HashMap<Tile, (usize, Flip)>> =
             vec![HashMap::new(); self.state.palettes.len()];
@@ -792,15 +808,22 @@ impl<'a> Importer<'a> {
                     _ => [9, 19, 9],                  // default green background
                 }
             };
+
+            let area_name = match self.area_name_by_map_id.get(&(parent as u8)) {
+                Some(name) => name.clone(),
+                None => {
+                    match world_idx {
+                        0 => format!("{:02X} Light World", parent),
+                        1 => format!("{:02X} Dark World", parent),
+                        2 => format!("{:02X} Special World", parent),
+                        _ => bail!("unexpected world_idx: {}", world_idx),
+                    }
+                }
+            };
             let mut area: Area = Area {
                 modified: false,
-                name: match world_idx {
-                    0 => format!("{:02X} Light World", parent),
-                    1 => format!("{:02X} Dark World", parent),
-                    2 => format!("{:02X} Special World", parent),
-                    _ => bail!("unexpected world_idx: {}", world_idx),
-                },
-                theme: "Base".to_string(),
+                name: area_name,
+                theme: self.theme.clone(),
                 vanilla_map_id: Some(parent as u8),
                 bg_color,
                 size: (size.0 * 2, size.1 * 2),

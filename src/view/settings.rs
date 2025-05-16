@@ -66,9 +66,8 @@ pub fn import_rom_confirm_view(_state: &EditorState) -> Element<Message> {
     container(
         column![
             text("Import project from ROM?"),
-            text(
-                "This may replace existing project data, including palettes, tilesets, and areas."
-            ),
+            text("This may update existing palettes, tilesets, and areas."),
+            text("This action cannot be undone."),
             row![
                 button(text("Import from ROM"))
                     .style(button::danger)
@@ -81,7 +80,7 @@ pub fn import_rom_confirm_view(_state: &EditorState) -> Element<Message> {
         ]
         .spacing(15),
     )
-    .width(450)
+    .width(500)
     .padding(25)
     .style(modal_background_style)
     .into()
