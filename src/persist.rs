@@ -5,7 +5,6 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use hashbrown::HashMap;
 use json_pretty_compact::PrettyCompactFormatter;
 use log::info;
 use serde::{de::DeserializeOwned, Serialize};
@@ -14,8 +13,8 @@ use serde_json::Serializer;
 use crate::{
     helpers::scale_color,
     state::{
-        ensure_areas_non_empty, ensure_palettes_non_empty, ensure_themes_non_empty, EditorState,
-        Palette, PaletteId, TileIdx,
+        ensure_areas_non_empty, ensure_palettes_non_empty, ensure_themes_non_empty, Area, AreaId,
+        AreaPosition, EditorState, Palette,
     },
     update::update_palette_order,
 };
@@ -211,8 +210,7 @@ pub fn load_area_list(state: &mut EditorState) -> Result<()> {
         state.area_names.push(area_name.into_string().unwrap());
     }
     ensure_themes_non_empty(state);
-    ensure_areas_non_empty(state);
-    save_area(state)?;
+    ensure_areas_non_empty(state)?;
     state.area_names.sort();
     state.area_names.dedup();
     state.theme_names.sort();
@@ -220,20 +218,20 @@ pub fn load_area_list(state: &mut EditorState) -> Result<()> {
     Ok(())
 }
 
-pub fn load_area(state: &mut EditorState, name: &str, theme: &str) -> Result<()> {
+pub fn load_area(state: &EditorState, area_id: &AreaId) -> Result<Area> {
+    let (theme_name, area_name) = area_id;
     let area_path = get_area_dir(state)?
-        .join(name)
-        .join(format!("{}.json", theme));
-    state.area = load_json(&area_path)?;
-    state.area.name = name.to_owned();
-    state.area.theme = theme.to_owned();
-    Ok(())
+        .join(area_name)
+        .join(format!("{}.json", theme_name));
+    let mut area: Area = load_json(&area_path)?;
+    area.name = area_name.to_owned();
+    area.theme = theme_name.to_owned();
+    Ok(area)
 }
 
-pub fn save_area_png(state: &EditorState) -> Result<()> {
+pub fn save_area_png(state: &EditorState, area_id: &AreaId) -> Result<()> {
     let mut color_bytes: Vec<Vec<[u8; 3]>> = vec![];
-    let area = &state.area;
-
+    let area = &state.areas[area_id];
     for i in 0..state.palettes.len() {
         let mut colors = state.palettes[i].colors.clone();
         colors[0] = area.bg_color;
@@ -249,8 +247,8 @@ pub fn save_area_png(state: &EditorState) -> Result<()> {
     let mut data: Vec<u8> = vec![0; num_rows * num_cols * 3];
     let col_stride = 3;
     let row_stride = num_cols * col_stride;
-    for sy in 0..state.area.size.1 as usize {
-        for sx in 0..state.area.size.0 as usize {
+    for sy in 0..area.size.1 as usize {
+        for sx in 0..area.size.0 as usize {
             let screen = &area.screens[sy * area.size.0 as usize + sx];
             let screen_addr = sy * 256 * row_stride + sx * 256 * col_stride;
             for ty in 0..32 {
@@ -287,8 +285,8 @@ pub fn save_area_png(state: &EditorState) -> Result<()> {
     }
 
     let area_dir = get_area_dir(state)?;
-    let area_png_filename = format!("{}.png", state.area.theme);
-    let area_png_path = area_dir.join(&state.area.name).join(area_png_filename);
+    let area_png_filename = format!("{}.png", area.theme);
+    let area_png_path = area_dir.join(&area.name).join(area_png_filename);
     let file = File::create(&area_png_path).unwrap();
     let ref mut w = BufWriter::new(file);
     let mut encoder = png::Encoder::new(w, num_cols as u32, num_rows as u32);
@@ -300,19 +298,20 @@ pub fn save_area_png(state: &EditorState) -> Result<()> {
     Ok(())
 }
 
-pub fn save_area_json(state: &mut EditorState) -> Result<()> {
+pub fn save_area_json(state: &EditorState, area_id: &AreaId) -> Result<()> {
     let area_dir = get_area_dir(state)?;
-    let area_json_filename = format!("{}.json", state.area.theme);
-    let area_json_path = area_dir.join(&state.area.name).join(area_json_filename);
-    save_json(&area_json_path, &state.area)?;
+    let (theme_name, area_name) = area_id;
+    let area_json_filename = format!("{}.json", theme_name);
+    let area_json_path = area_dir.join(&area_name).join(area_json_filename);
+    save_json(&area_json_path, &state.areas[area_id])?;
     Ok(())
 }
 
-pub fn save_area(state: &mut EditorState) -> Result<()> {
-    if state.area.modified {
-        save_area_json(state)?;
-        save_area_png(state)?;
-        state.area.modified = false;
+pub fn save_area(state: &mut EditorState, area_id: &AreaId) -> Result<()> {
+    if state.areas[area_id].modified {
+        save_area_json(state, area_id)?;
+        save_area_png(state, area_id)?;
+        state.areas.get_mut(area_id).unwrap().modified = false;
     }
     Ok(())
 }
@@ -380,49 +379,46 @@ pub fn delete_area_theme(state: &mut EditorState, area_name: &str, theme: &str) 
     Ok(())
 }
 
-pub fn _remap_tiles(
-    state: &mut EditorState,
-    map: &HashMap<(PaletteId, TileIdx), (PaletteId, TileIdx)>,
-) -> Result<()> {
-    let area_names = state.area_names.clone();
-    let theme_names = state.theme_names.clone();
-    for area_name in &area_names {
-        for theme_name in &theme_names {
-            load_area(state, area_name, theme_name)?;
-            for y in 0..state.area.size.1 as u16 * 32 {
-                for x in 0..state.area.size.0 as u16 * 32 {
-                    let pal = state.area.get_palette(x, y).unwrap();
-                    let tile_idx = state.area.get_tile(x, y).unwrap();
-                    if let Some(&(p1, t1)) = map.get(&(pal, tile_idx)) {
-                        state.area.set_palette(x, y, p1).unwrap();
-                        state.area.set_tile(x, y, t1).unwrap();
-                        state.area.modified = true;
-                    }
-                }
-            }
-            save_area(state)?;
-        }
-    }
-    Ok(())
-}
+// pub fn _remap_tiles(
+//     state: &mut EditorState,
+//     map: &HashMap<(PaletteId, TileIdx), (PaletteId, TileIdx)>,
+// ) -> Result<()> {
+//     let area_names = state.area_names.clone();
+//     let theme_names = state.theme_names.clone();
+//     for area_name in &area_names {
+//         for theme_name in &theme_names {
+//             load_area(state, area_name, theme_name)?;
+//             for y in 0..state.main_area.size.1 as u16 * 32 {
+//                 for x in 0..state.main_area.size.0 as u16 * 32 {
+//                     let pal = state.main_area.get_palette(x, y).unwrap();
+//                     let tile_idx = state.main_area.get_tile(x, y).unwrap();
+//                     if let Some(&(p1, t1)) = map.get(&(pal, tile_idx)) {
+//                         state.main_area.set_palette(x, y, p1).unwrap();
+//                         state.main_area.set_tile(x, y, t1).unwrap();
+//                         state.main_area.modified = true;
+//                     }
+//                 }
+//             }
+//             save_area(state)?;
+//         }
+//     }
+//     Ok(())
+// }
 
 pub fn save_project(state: &mut EditorState) -> Result<()> {
     if state.global_config.project_dir.is_none() {
         return Ok(());
     }
     save_palettes(state)?;
-    save_area(state)?;
+    save_area(state, &state.main_area_id.clone())?;
     Ok(())
 }
 
 pub fn load_project(state: &mut EditorState) -> Result<()> {
     load_palettes(state)?;
     load_area_list(state)?;
-    load_area(
-        state,
-        &state.area_names[0].clone(),
-        &state.theme_names[0].clone(),
-    )?;
+    let area_id = (state.theme_names[0].clone(), state.area_names[0].clone());
+    state.switch_area(AreaPosition::Main, &area_id)?;
     state.palette_idx = 0;
     state.color_idx = None;
     state.tile_idx = None;

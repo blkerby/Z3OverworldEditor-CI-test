@@ -13,8 +13,8 @@ use crate::{
         load_area_list, rename_area, rename_area_theme, save_area,
     },
     state::{
-        Area, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile, TileBlock, TileIdx,
-        MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
+        Area, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile, TileBlock,
+        TileIdx, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
     },
     undo::{get_undo_action, UndoAction},
     view::{open_project, open_rom},
@@ -87,19 +87,19 @@ fn should_debounce(message: &Message, last_message: &Message) -> bool {
             _ => false,
         },
         Message::AreaBrush {
-            area,
-            theme,
+            position,
+            area_id,
             coords,
             selection,
         } => match last_message {
             Message::AreaBrush {
-                area: last_area,
-                theme: last_theme,
+                position: last_position,
+                area_id: last_area_id,
                 coords: last_coords,
                 selection: last_selection,
             } => {
-                area == last_area
-                    && theme == last_theme
+                position == last_position
+                    && area_id == last_area_id
                     && coords == last_coords
                     && selection == last_selection
             }
@@ -133,6 +133,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 Focus::MainPickArea => {}
                 Focus::MainPickTheme => {}
                 Focus::MainArea => {}
+                Focus::SideArea => {}
                 Focus::PickPalette => {}
                 Focus::PaletteColor | Focus::GraphicsPixel => {
                     state.identify_color = modifiers.control();
@@ -162,6 +163,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                     Focus::MainPickArea => {}
                     Focus::MainPickTheme => {}
                     Focus::MainArea => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::SideArea => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {}
@@ -206,6 +210,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                     Focus::MainArea => {
                         // TODO: Handle making selections with keyboard:
                     }
+                    Focus::SideArea => {
+                        // TODO: Handle making selections with keyboard:
+                    }
                     Focus::PickPalette => {}
                     Focus::PaletteColor => {
                         if let Some(idx) = state.color_idx {
@@ -244,25 +251,25 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 match state.focus {
                     Focus::None => {}
                     Focus::MainPickArea => {
-                        if let Some(area_idx) =
-                            state.area_names.iter().position(|x| x == &state.area.name)
+                        let (theme_name, area_name) = &state.main_area_id;
+                        if let Some(area_idx) = state.area_names.iter().position(|x| x == area_name)
                         {
                             if area_idx + 1 < state.area_names.len() {
-                                save_area(state)?;
-                                load_area(
-                                    state,
-                                    &state.area_names[area_idx + 1].clone(),
-                                    &state.area.theme.clone(),
-                                )?;
+                                let area_id =
+                                    (theme_name.clone(), state.area_names[area_idx + 1].clone());
+                                state.set_area(AreaPosition::Main, load_area(state, &area_id)?)?;
                             }
                         } else {
-                            bail!("Area not found: {}", state.area.name);
+                            bail!("Area not found: {}", area_name);
                         }
                     }
                     Focus::MainPickTheme => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::MainArea => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::SideArea => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {
@@ -300,25 +307,25 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 match state.focus {
                     Focus::None => {}
                     Focus::MainPickArea => {
-                        if let Some(area_idx) =
-                            state.area_names.iter().position(|x| x == &state.area.name)
+                        let (theme_name, area_name) = &state.main_area_id;
+                        if let Some(area_idx) = state.area_names.iter().position(|x| x == area_name)
                         {
-                            if area_idx > 0 {
-                                save_area(state)?;
-                                load_area(
-                                    state,
-                                    &state.area_names[area_idx - 1].clone(),
-                                    &state.area.theme.clone(),
-                                )?;
+                            if area_idx - 1 > 0 {
+                                let area_id =
+                                    (theme_name.clone(), state.area_names[area_idx - 1].clone());
+                                state.set_area(AreaPosition::Main, load_area(state, &area_id)?)?;
                             }
                         } else {
-                            bail!("Area not found: {}", state.area.name);
+                            bail!("Area not found: {}", area_name);
                         }
                     }
                     Focus::MainPickTheme => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::MainArea => {
+                        // TODO: Handle making selections with keyboard:
+                    }
+                    Focus::SideArea => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {
@@ -777,8 +784,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             pal.tiles[tile_idx as usize].pixels[coords.y as usize][coords.x as usize] = color_idx;
             pal.modified = true;
         }
-        Message::SelectArea(name) => {
-            load_area(state, &name, &state.area.theme.clone())?;
+        Message::SelectMainArea(name) => {
+            let (theme_name, _) = &state.main_area_id;
+            load_area(state, &(theme_name.clone(), name.clone()))?;
         }
         Message::AddAreaDialogue => {
             state.dialogue = Some(Dialogue::AddArea {
@@ -818,31 +826,35 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 }
             }
             for theme in state.theme_names.clone() {
-                state.area = Area {
-                    modified: true,
-                    name: name.clone(),
-                    theme,
-                    size: *size,
-                    bg_color: state.area.bg_color,
-                    screens: (0..size.0)
-                        .cartesian_product(0..size.1)
-                        .map(|(x, y)| Screen {
-                            position: (x, y),
-                            palettes: [[0; 32]; 32],
-                            tiles: [[0; 32]; 32],
-                            flips: [[Flip::None; 32]; 32],
-                        })
-                        .collect(),
-                };
-                save_area(state)?;
+                state.set_area(
+                    AreaPosition::Main,
+                    Area {
+                        modified: true,
+                        name: name.clone(),
+                        theme,
+                        size: *size,
+                        bg_color: state.areas[&state.main_area_id].bg_color,
+                        screens: (0..size.0)
+                            .cartesian_product(0..size.1)
+                            .map(|(x, y)| Screen {
+                                position: (x, y),
+                                palettes: [[0; 32]; 32],
+                                tiles: [[0; 32]; 32],
+                                flips: [[Flip::None; 32]; 32],
+                            })
+                            .collect(),
+                    },
+                )?;
+                save_area(state, &state.main_area_id.clone())?;
             }
             state.dialogue = None;
             state.area_names.push(name.clone());
             state.area_names.sort();
         }
         Message::EditAreaDialogue => {
+            let (_, area_name) = &state.main_area_id;
             state.dialogue = Some(Dialogue::EditArea {
-                name: state.area.name.clone(),
+                name: area_name.clone(),
             });
             return Ok(Some(iced::widget::text_input::focus("EditArea")));
         }
@@ -867,44 +879,37 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             if new_name != old_name {
                 rename_area(state, old_name, new_name)?;
                 load_area_list(state)?;
-                state.area.name = new_name.clone();
+                state.main_area_id.1 = new_name.clone();
             }
             state.dialogue = None;
         }
         &Message::EditAreaBGRed(c) => {
-            let mut color = state.area.bg_color;
+            let mut color = state.main_area().bg_color;
             color[0] = c;
             return Ok(Some(Task::done(Message::EditAreaBGColor {
-                area_name: state.area.name.clone(),
-                theme_name: state.area.theme.clone(),
+                area_id: state.area_id(AreaPosition::Main).clone(),
                 color,
             })));
         }
         &Message::EditAreaBGGreen(c) => {
-            let mut color = state.area.bg_color;
+            let mut color = state.main_area().bg_color;
             color[1] = c;
             return Ok(Some(Task::done(Message::EditAreaBGColor {
-                area_name: state.area.name.clone(),
-                theme_name: state.area.theme.clone(),
+                area_id: state.area_id(AreaPosition::Main).clone(),
                 color,
             })));
         }
         &Message::EditAreaBGBlue(c) => {
-            let mut color = state.area.bg_color;
+            let mut color = state.main_area().bg_color;
             color[2] = c;
             return Ok(Some(Task::done(Message::EditAreaBGColor {
-                area_name: state.area.name.clone(),
-                theme_name: state.area.theme.clone(),
+                area_id: state.area_id(AreaPosition::Main).clone(),
                 color,
             })));
         }
-        &Message::EditAreaBGColor {
-            ref area_name,
-            ref theme_name,
-            color,
-        } => {
-            switch_area(state, area_name, theme_name)?;
-            state.area.bg_color = color;
+        &Message::EditAreaBGColor { ref area_id, color } => {
+            state.switch_area(AreaPosition::Main, area_id)?;
+            state.main_area_mut().bg_color = color;
         }
         Message::DeleteAreaDialogue => {
             state.dialogue = Some(Dialogue::DeleteArea);
@@ -916,15 +921,20 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             }
             delete_area(state, name)?;
             load_area_list(state)?;
-            load_area(
-                state,
-                &state.area_names[0].clone(),
-                &state.area.theme.clone(),
+            state.set_area(
+                AreaPosition::Main,
+                load_area(
+                    state,
+                    &(state.area_names[0].clone(), state.main_area().theme.clone()),
+                )?,
             )?;
             state.dialogue = None;
         }
-        Message::SelectTheme(theme) => {
-            load_area(state, &state.area.name.clone(), &theme)?;
+        &Message::SelectTheme(position, ref theme) => {
+            state.set_area(
+                position,
+                load_area(state, &(state.area(position).name.clone(), theme.clone()))?,
+            )?;
         }
         Message::AddThemeDialogue => {
             state.dialogue = Some(Dialogue::AddTheme {
@@ -950,18 +960,21 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                     return Ok(None);
                 }
             }
-            let old_theme = state.area.theme.clone();
+            let old_theme = state.main_area().theme.clone();
             for area_name in &state.area_names.clone() {
                 copy_area_theme(state, area_name, &old_theme, &theme_name)?;
             }
-            state.area.theme = theme_name.clone();
+            state.set_area(
+                AreaPosition::Main,
+                load_area(state, &(theme_name.clone(), state.main_area().name.clone()))?,
+            )?;
             state.theme_names.push(theme_name.clone());
             state.theme_names.sort();
             state.dialogue = None;
         }
         Message::RenameThemeDialogue => {
             state.dialogue = Some(Dialogue::RenameTheme {
-                name: state.area.theme.clone(),
+                name: state.main_area().theme.clone(),
             });
             return Ok(Some(iced::widget::text_input::focus("RenameTheme")));
         }
@@ -987,7 +1000,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 rename_area_theme(state, area_name, old_name, new_name)?;
             }
             load_area_list(state)?;
-            state.area.theme = new_name.clone();
+            state.set_area(
+                AreaPosition::Main,
+                load_area(state, &(new_name.clone(), state.main_area().name.clone()))?,
+            )?;
             state.dialogue = None;
         }
         Message::DeleteThemeDialogue => {
@@ -1002,10 +1018,12 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 delete_area_theme(state, area_name, theme_name)?;
             }
             load_area_list(state)?;
-            load_area(
-                state,
-                &state.area.name.clone(),
-                &state.theme_names[0].clone(),
+            state.set_area(
+                AreaPosition::Main,
+                load_area(
+                    state,
+                    &(state.main_area().name.clone(), state.theme_names[0].clone()),
+                )?,
             )?;
             state.dialogue = None;
         }
@@ -1032,6 +1050,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 SelectionSource::MainArea => {
                     state.focus = Focus::MainArea;
                 }
+                SelectionSource::SideArea => {
+                    state.focus = Focus::SideArea;
+                }
                 SelectionSource::Tileset => {
                     if left == right && top == bottom {
                         let idx = p1.1 * 16 + p1.0;
@@ -1052,9 +1073,14 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 for x in left..=right {
                     match state.selection_source {
                         SelectionSource::MainArea => {
-                            pal_row.push(state.area.get_palette(x, y)?);
-                            tile_row.push(state.area.get_tile(x, y)?);
-                            flip_row.push(state.area.get_flip(x, y)?);
+                            pal_row.push(state.main_area().get_palette(x, y)?);
+                            tile_row.push(state.main_area().get_tile(x, y)?);
+                            flip_row.push(state.main_area().get_flip(x, y)?);
+                        }
+                        SelectionSource::SideArea => {
+                            pal_row.push(state.side_area().get_palette(x, y)?);
+                            tile_row.push(state.side_area().get_tile(x, y)?);
+                            flip_row.push(state.side_area().get_flip(x, y)?);
                         }
                         SelectionSource::Tileset => {
                             pal_row.push(state.palettes[state.palette_idx].id);
@@ -1091,31 +1117,24 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 state.selected_gfx.push(gfx_row);
             }
         }
-        Message::AreaBrush {
-            area,
-            theme,
+        &Message::AreaBrush {
+            position,
+            ref area_id,
             coords,
-            selection,
+            ref selection,
         } => {
-            switch_area(state, area, theme)?;
+            state.switch_area(position, area_id)?;
             let s = selection;
             let p = coords;
+            let area = state.area_mut(position);
             for y in 0..s.size.1 {
                 for x in 0..s.size.0 {
-                    let _ = state.area.set_palette(
-                        p.x + x,
-                        p.y + y,
-                        s.palettes[y as usize][x as usize],
-                    );
-                    let _ = state
-                        .area
-                        .set_tile(p.x + x, p.y + y, s.tiles[y as usize][x as usize]);
-                    let _ = state
-                        .area
-                        .set_flip(p.x + x, p.y + y, s.flips[y as usize][x as usize]);
+                    let _ = area.set_palette(p.x + x, p.y + y, s.palettes[y as usize][x as usize]);
+                    let _ = area.set_tile(p.x + x, p.y + y, s.tiles[y as usize][x as usize]);
+                    let _ = area.set_flip(p.x + x, p.y + y, s.flips[y as usize][x as usize]);
                 }
             }
-            state.area.modified = true;
+            area.modified = true;
         }
         &Message::OpenTile {
             palette_id,
@@ -1217,12 +1236,4 @@ pub fn update_palette_order(state: &mut EditorState) {
             state.palette_idx = i;
         }
     }
-}
-
-fn switch_area(state: &mut EditorState, area_name: &str, theme_name: &str) -> Result<()> {
-    if area_name != state.area.name || theme_name != state.area.theme {
-        save_area(state)?;
-        load_area(state, area_name, theme_name)?;
-    }
-    Ok(())
 }

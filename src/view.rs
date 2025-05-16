@@ -22,7 +22,7 @@ use tiles::tile_view;
 
 use crate::{
     message::Message,
-    state::{Dialogue, EditorState},
+    state::{AreaPosition, Dialogue, EditorState},
 };
 
 pub async fn open_project() -> Option<PathBuf> {
@@ -108,7 +108,7 @@ pub fn view(state: &EditorState) -> Element<Message> {
                 area_controls(state),
             ]
             .spacing(10),
-            area_grid_view(state),
+            area_grid_view(state, AreaPosition::Main),
         ]
         .padding(10)
         .spacing(10),

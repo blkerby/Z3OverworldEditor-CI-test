@@ -313,7 +313,7 @@ pub fn delete_palette_view(state: &EditorState) -> Element<Message> {
 
 pub fn used_palettes_view(state: &EditorState) -> Element<Message> {
     let mut col: Column<Message> = Column::new();
-    let palette_ids = state.area.get_unique_palettes();
+    let palette_ids = state.main_area().get_unique_palettes();
     for pal_id in palette_ids {
         let Some(&palette_idx) = state.palettes_id_idx_map.get(&pal_id) else {
             col = col.push(row![text(format!("{} (does not exist)", pal_id))]);

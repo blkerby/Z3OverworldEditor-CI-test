@@ -16,7 +16,8 @@ use crate::{
     helpers::{alpha_blend, scale_color},
     message::{Message, SelectionSource},
     state::{
-        Area, ColorIdx, EditorState, Focus, Palette, PaletteId, TileBlock, TileCoord, TileIdx,
+        Area, AreaId, AreaPosition, ColorIdx, EditorState, Focus, Palette, PaletteId, TileBlock,
+        TileCoord, TileIdx,
     },
 };
 
@@ -27,6 +28,8 @@ use super::modal_background_style;
 // primitives (e.g. rectangles) on top of images within a single canvas.
 
 struct AreaGrid<'a> {
+    position: AreaPosition,
+    area_id: AreaId,
     area: &'a Area,
     palettes: &'a [Palette],
     palettes_id_idx_map: &'a HashMap<PaletteId, usize>,
@@ -87,6 +90,8 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                 self.area.size,
                 self.pixel_size,
             ));
+        } else {
+            state.coords = None;
         }
         match event {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
@@ -99,8 +104,8 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                             return (
                                 canvas::event::Status::Captured,
                                 Some(Message::AreaBrush {
-                                    area: self.area.name.clone(),
-                                    theme: self.area.theme.clone(),
+                                    position: self.position,
+                                    area_id: self.area_id.clone(),
                                     coords,
                                     selection: self.tile_block.clone(),
                                 }),
@@ -154,8 +159,8 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                             return (
                                 canvas::event::Status::Captured,
                                 Some(Message::AreaBrush {
-                                    area: self.area.name.clone(),
-                                    theme: self.area.theme.clone(),
+                                    position: self.position,
+                                    area_id: self.area_id.clone(),
                                     coords,
                                     selection: self.tile_block.clone(),
                                 }),
@@ -432,9 +437,10 @@ impl canvas::Program<Message> for AreaSelect {
     }
 }
 
-pub fn area_grid_view(state: &EditorState) -> Element<Message> {
-    let num_cols = state.area.size.1 * 32;
-    let num_rows = state.area.size.0 * 32;
+pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Message> {
+    let area = state.area(position);
+    let num_cols = area.size.1 * 32;
+    let num_rows = area.size.0 * 32;
     let pixel_size = state.global_config.pixel_size;
 
     let mut left = 0;
@@ -455,7 +461,9 @@ pub fn area_grid_view(state: &EditorState) -> Element<Message> {
     Scrollable::with_direction(
         column![stack![
             canvas(AreaGrid {
-                area: &state.area,
+                position,
+                area_id: state.area_id(position).clone(),
+                area: &state.area(position),
                 palettes: &state.palettes,
                 palettes_id_idx_map: &state.palettes_id_idx_map,
                 pixel_size,
@@ -502,8 +510,8 @@ pub fn area_controls(state: &EditorState) -> Element<Message> {
         text("Area"),
         pick_list(
             state.area_names.clone(),
-            Some(state.area.name.clone()),
-            Message::SelectArea
+            Some(state.main_area().name.clone()),
+            Message::SelectMainArea
         )
         .on_open(Message::Focus(Focus::MainPickArea))
         .width(200),
@@ -515,8 +523,8 @@ pub fn area_controls(state: &EditorState) -> Element<Message> {
         text("Theme"),
         pick_list(
             state.theme_names.clone(),
-            Some(state.area.theme.clone()),
-            Message::SelectTheme
+            Some(state.main_area().theme.clone()),
+            |x| Message::SelectTheme(AreaPosition::Main, x)
         )
         .on_open(Message::Focus(Focus::MainPickTheme))
         .width(200),
@@ -574,7 +582,7 @@ pub fn add_area_view(name: &String, size: (u8, u8)) -> Element<Message> {
 }
 
 pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Message> {
-    let old_name = state.area.name.clone();
+    let old_name = state.main_area().name.clone();
     let rgb_width = 80;
     let edit_area_msg = Message::EditArea {
         old_name: old_name.clone(),
@@ -595,16 +603,24 @@ pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Me
             row![text("Background color:")],
             row![
                 text("Red"),
-                number_input(&state.area.bg_color[0], 0..=31, Message::EditAreaBGRed)
+                number_input(&state.main_area().bg_color[0], 0..=31, Message::EditAreaBGRed)
                     .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Green"),
-                number_input(&state.area.bg_color[1], 0..=31, Message::EditAreaBGGreen)
-                    .width(rgb_width),
+                number_input(
+                    &state.main_area().bg_color[1],
+                    0..=31,
+                    Message::EditAreaBGGreen
+                )
+                .width(rgb_width),
                 iced::widget::Space::with_width(10),
                 text("Blue"),
-                number_input(&state.area.bg_color[2], 0..=31, Message::EditAreaBGBlue)
-                    .width(rgb_width),
+                number_input(
+                    &state.main_area().bg_color[2],
+                    0..=31,
+                    Message::EditAreaBGBlue
+                )
+                .width(rgb_width),
             ]
             .spacing(5)
             .align_y(iced::alignment::Vertical::Center),
@@ -625,7 +641,7 @@ pub fn edit_area_view(state: &EditorState, name: &String) -> Element<'static, Me
 }
 
 pub fn delete_area_view(state: &EditorState) -> Element<Message> {
-    let name = state.area.name.clone();
+    let name = state.main_area().name.clone();
     container(
         column![
             text(format!("Delete area \"{}\"?", name)),
@@ -669,7 +685,7 @@ pub fn add_theme_view(name: &String) -> Element<Message> {
 }
 
 pub fn rename_theme_view(state: &EditorState, name: &String) -> Element<'static, Message> {
-    let old_name = state.area.theme.clone();
+    let old_name = state.main_area().theme.clone();
     let rename_msg = Message::RenameTheme {
         old_name: old_name.clone(),
         new_name: name.clone(),
@@ -703,7 +719,7 @@ pub fn rename_theme_view(state: &EditorState, name: &String) -> Element<'static,
 }
 
 pub fn delete_theme_view(state: &EditorState) -> Element<Message> {
-    let theme = state.area.theme.clone();
+    let theme = state.main_area().theme.clone();
     container(
         column![
             text(format!("Delete theme \"{}\"?", theme)),

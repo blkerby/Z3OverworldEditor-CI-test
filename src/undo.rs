@@ -200,7 +200,7 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
                 color_idx: c,
             })
         }
-        Message::SelectArea(_) => UndoAction::None,
+        Message::SelectMainArea(_) => UndoAction::None,
         Message::AddAreaDialogue => UndoAction::None,
         Message::SetAddAreaName(_) => UndoAction::None,
         Message::SetAddAreaSizeX(_) => UndoAction::None,
@@ -216,17 +216,15 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
         Message::EditAreaBGGreen(_) => UndoAction::None,
         Message::EditAreaBGBlue(_) => UndoAction::None,
         &Message::EditAreaBGColor {
-            ref area_name,
-            ref theme_name,
-            color,
+            ref area_id,
+            color: _,
         } => UndoAction::Ok(Message::EditAreaBGColor {
-            area_name: area_name.clone(),
-            theme_name: theme_name.clone(),
-            color: color,
+            area_id: area_id.clone(),
+            color: state.areas[area_id].bg_color,
         }),
         Message::DeleteAreaDialogue => UndoAction::None,
         Message::DeleteArea(_) => UndoAction::Irreversible,
-        Message::SelectTheme(_) => UndoAction::None,
+        Message::SelectTheme(_, _) => UndoAction::None,
         Message::AddThemeDialogue => UndoAction::None,
         Message::SetAddThemeName(_) => UndoAction::None,
         Message::AddTheme(theme_name) => UndoAction::Ok(Message::DeleteTheme(theme_name.clone())),
@@ -242,8 +240,8 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
         Message::ProgressTileSelection(_) => UndoAction::None,
         Message::EndTileSelection(_) => UndoAction::None,
         Message::AreaBrush {
-            area,
-            theme,
+            position,
+            area_id,
             coords,
             selection,
         } => {
@@ -255,13 +253,13 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
                 let mut tile_row: Vec<TileIdx> = vec![];
                 let mut flip_row: Vec<Flip> = vec![];
                 for x in 0..selection.size.0 {
-                    if let Ok(p) = state.area.get_palette(coords.x + x, coords.y + y) {
+                    if let Ok(p) = state.areas[area_id].get_palette(coords.x + x, coords.y + y) {
                         palette_row.push(p);
                     }
-                    if let Ok(t) = state.area.get_tile(coords.x + x, coords.y + y) {
+                    if let Ok(t) = state.areas[area_id].get_tile(coords.x + x, coords.y + y) {
                         tile_row.push(t);
                     }
-                    if let Ok(f) = state.area.get_flip(coords.x + x, coords.y + y) {
+                    if let Ok(f) = state.areas[area_id].get_flip(coords.x + x, coords.y + y) {
                         flip_row.push(f);
                     }
                 }
@@ -276,8 +274,8 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
                 flips,
             };
             UndoAction::Ok(Message::AreaBrush {
-                area: area.clone(),
-                theme: theme.clone(),
+                position: *position,
+                area_id: area_id.clone(),
                 coords: *coords,
                 selection: new_selection,
             })

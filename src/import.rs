@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    persist::{load_area, load_project, save_area_json, save_area_png, save_project},
+    persist::{load_project, save_area_json, save_area_png, save_project},
     state::{Area, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId, Screen, Tile},
     update::update_palette_order,
 };
@@ -382,8 +382,10 @@ impl<'a> Importer<'a> {
         save_project(self.state)?;
         load_project(self.state)?;
         for area_name in &self.state.area_names.clone() {
-            load_area(self.state, &area_name, "Base")?;
-            save_area_png(self.state)?;
+            let area_id = ("Base".to_string(), area_name.clone());
+            self.state.load_area(&area_id)?;
+            save_area_png(self.state, &area_id)?;
+            self.state.areas.remove(&area_id);
         }
         load_project(self.state)?; // Load again to open the first room.
         Ok(())
@@ -919,8 +921,9 @@ impl<'a> Importer<'a> {
                     }
                 }
             }
-            self.state.area = area;
-            save_area_json(self.state)?;
+            self.state
+                .set_area(crate::state::AreaPosition::Main, area)?;
+            save_area_json(self.state, &self.state.main_area_id)?;
         }
         for i in 0..self.state.palettes.len() {
             for j in 0..used_tiles[i].len() {

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     message::{Message, SelectionSource},
-    persist,
+    persist::{self, load_area, save_area},
 };
 
 pub type ColorValue = u8; // Color value (0-31)
@@ -18,6 +18,9 @@ pub type PaletteIdx = usize; // internal ID of the palette (index into State.pal
 pub type TileIdx = u16; // Index into palette's tile list
 pub type PixelCoord = u8; // Index into 8x8 row or column (0-7)
 pub type TileCoord = u16; // Index into area: number of 8x8 tiles from top-left corner
+pub type AreaName = String;
+pub type ThemeName = String;
+pub type AreaId = (AreaName, ThemeName);
 pub type CollisionType = u8;
 pub type ColorRGB = [ColorValue; 3];
 
@@ -130,9 +133,9 @@ pub struct Area {
     #[serde(skip_serializing, skip_deserializing)]
     pub modified: bool,
     #[serde(skip_serializing, skip_deserializing)]
-    pub name: String,
+    pub name: AreaName,
     #[serde(skip_serializing, skip_deserializing)]
-    pub theme: String,
+    pub theme: ThemeName,
     pub bg_color: ColorRGB,
     // X and Y dimensions, measured in number of screens:
     pub size: (u8, u8),
@@ -142,6 +145,10 @@ pub struct Area {
 }
 
 impl Area {
+    pub fn id(&self) -> AreaId {
+        (self.theme.clone(), self.name.clone())
+    }
+
     pub fn get_screen_coords(&self, x: TileCoord, y: TileCoord) -> Result<(usize, usize, usize)> {
         if x >= self.size.0 as TileCoord * 32 || y >= self.size.1 as TileCoord * 32 {
             bail!("out of range");
@@ -207,11 +214,11 @@ pub enum Dialogue {
     AddPalette { name: String, id: PaletteId },
     RenamePalette { name: String },
     DeletePalette,
-    AddArea { name: String, size: (u8, u8) },
-    EditArea { name: String },
+    AddArea { name: AreaName, size: (u8, u8) },
+    EditArea { name: AreaName },
     DeleteArea,
-    AddTheme { name: String },
-    RenameTheme { name: String },
+    AddTheme { name: ThemeName },
+    RenameTheme { name: ThemeName },
     DeleteTheme,
 }
 
@@ -233,21 +240,37 @@ pub enum Focus {
     MainPickArea,
     MainPickTheme,
     MainArea,
+    SideArea,
     PickPalette,
     PaletteColor,
     GraphicsPixel,
     TilesetTile,
 }
 
+#[derive(Copy, Clone, Default, Debug)]
+pub enum SidePanelView {
+    #[default]
+    Tileset,
+    Area,
+}
+
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub enum AreaPosition {
+    #[default]
+    Main,
+    Side,
+}
+
 pub struct EditorState {
     pub global_config_path: PathBuf,
     pub global_config: GlobalConfig,
 
-    // Project data:
+    // Project data: Areas are loaded/unloaded dynamically
+    // to limit memory usage and start-up time. Everything else is fully loaded.
     pub palettes: Vec<Palette>,
-    pub area: Area,
-    pub area_names: Vec<String>,
-    pub theme_names: Vec<String>,
+    pub areas: HashMap<AreaId, Area>,
+    pub area_names: Vec<AreaName>,
+    pub theme_names: Vec<ThemeName>,
 
     // Undo functionality:
     pub undo_stack: Vec<(Message, Message)>,
@@ -259,6 +282,7 @@ pub struct EditorState {
     // General editing state:
     pub focus: Focus,
     pub brush_mode: bool,
+    pub side_panel_view: SidePanelView,
 
     // Palette editing state:
     pub palette_idx: PaletteIdx,
@@ -275,6 +299,8 @@ pub struct EditorState {
     pub pixel_coords: Option<(PixelCoord, PixelCoord)>,
 
     // Area editing state:
+    pub main_area_id: AreaId,
+    pub side_area_id: AreaId,
     pub selection_source: SelectionSource,
     pub start_coords: Option<(TileCoord, TileCoord)>,
     pub end_coords: Option<(TileCoord, TileCoord)>,
@@ -286,6 +312,87 @@ pub struct EditorState {
 
     // Cached data:
     pub palettes_id_idx_map: HashMap<PaletteId, usize>,
+}
+
+impl EditorState {
+    pub fn main_area(&self) -> &Area {
+        &self.areas[&self.main_area_id]
+    }
+
+    pub fn main_area_mut(&mut self) -> &mut Area {
+        self.areas.get_mut(&self.main_area_id.clone()).unwrap()
+    }
+
+    pub fn side_area(&self) -> &Area {
+        &self.areas[&self.side_area_id]
+    }
+
+    pub fn side_area_mut(&mut self) -> &mut Area {
+        self.areas.get_mut(&self.side_area_id.clone()).unwrap()
+    }
+
+    pub fn area_id(&self, position: AreaPosition) -> &AreaId {
+        match position {
+            AreaPosition::Main => &self.main_area_id,
+            AreaPosition::Side => &self.side_area_id,
+        }
+    }
+
+    pub fn area_id_mut(&mut self, position: AreaPosition) -> &mut AreaId {
+        match position {
+            AreaPosition::Main => &mut self.main_area_id,
+            AreaPosition::Side => &mut self.side_area_id,
+        }
+    }
+
+    pub fn area(&self, position: AreaPosition) -> &Area {
+        &self.areas[self.area_id(position)]
+    }
+
+    pub fn area_mut(&mut self, position: AreaPosition) -> &mut Area {
+        self.areas.get_mut(&self.area_id(position).clone()).unwrap()
+    }
+
+    pub fn set_area(&mut self, position: AreaPosition, area: Area) -> Result<()> {
+        let id = area.id();
+        self.areas.insert(id.clone(), area);
+        match position {
+            AreaPosition::Main => {
+                self.main_area_id = id;
+            }
+            AreaPosition::Side => {
+                self.side_area_id = id;
+            }
+        }
+        self.cleanup_areas()?;
+        Ok(())
+    }
+
+    pub fn load_area(&mut self, area_id: &AreaId) -> Result<()> {
+        let area = load_area(self, area_id)?;
+        self.areas.insert(area_id.clone(), area);
+        Ok(())
+    }
+
+    pub fn switch_area(&mut self, position: AreaPosition, area_id: &AreaId) -> Result<()> {
+        if !self.areas.contains_key(area_id) {
+            self.load_area(area_id)?;
+        }
+        *self.area_id_mut(position) = area_id.clone();
+        self.cleanup_areas()?;
+        Ok(())
+    }
+
+    pub fn cleanup_areas(&mut self) -> Result<()> {
+        // Unload areas that aren't currently in use.
+        let mut delete_keys: HashSet<AreaId> = self.areas.keys().cloned().collect();
+        delete_keys.remove(&self.main_area_id);
+        for key in delete_keys {
+            save_area(self, &key)?;
+            self.areas.remove(&key);
+        }
+        Ok(())
+    }
 }
 
 fn get_global_config_path() -> Result<PathBuf> {
@@ -302,15 +409,16 @@ pub fn ensure_themes_non_empty(state: &mut EditorState) {
     }
 }
 
-pub fn ensure_areas_non_empty(state: &mut EditorState) {
+pub fn ensure_areas_non_empty(state: &mut EditorState) -> Result<()> {
     if state.area_names.len() == 0 {
         state.area_names.push("Example".to_string());
-        state.area.name = "Example".to_string();
-        state.area.theme = "Base".to_string();
-        state.area.size = (2, 2);
+        let mut area = Area::default();
+        area.name = "Example".to_string();
+        area.theme = "Base".to_string();
+        area.size = (2, 2);
         for y in 0..2 {
             for x in 0..2 {
-                state.area.screens.push(Screen {
+                area.screens.push(Screen {
                     position: (x, y),
                     palettes: [[0; 32]; 32],
                     tiles: [[0; 32]; 32],
@@ -318,8 +426,11 @@ pub fn ensure_areas_non_empty(state: &mut EditorState) {
                 });
             }
         }
-        state.area.modified = true;
+        area.modified = true;
+        state.set_area(AreaPosition::Main, area)?;
+        save_area(state, &state.main_area_id.clone())?;
     }
+    Ok(())
 }
 
 pub fn ensure_palettes_non_empty(state: &mut EditorState) {
@@ -351,12 +462,15 @@ pub fn get_initial_state() -> Result<EditorState> {
         },
         rom_path: None,
         palettes: vec![],
-        area: Area::default(),
+        areas: HashMap::new(),
+        main_area_id: ("Base".to_string(), "Example".to_string()),
+        side_area_id: ("Base".to_string(), "Example".to_string()),
         area_names: vec![],
         theme_names: vec![],
         undo_stack: vec![],
         redo_stack: vec![],
         brush_mode: false,
+        side_panel_view: SidePanelView::default(),
         focus: Focus::None,
         palette_idx: 0,
         color_idx: None,
@@ -383,7 +497,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         }
     }
     ensure_themes_non_empty(&mut state);
-    ensure_areas_non_empty(&mut state);
+    ensure_areas_non_empty(&mut state)?;
     ensure_palettes_non_empty(&mut state);
     Ok(state)
 }

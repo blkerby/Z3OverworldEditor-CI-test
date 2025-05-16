@@ -3,12 +3,14 @@ use std::path::PathBuf;
 use iced::Point;
 
 use crate::state::{
-    CollisionType, ColorIdx, ColorRGB, ColorValue, Focus, Palette, PaletteId, PaletteIdx, PixelCoord, Tile, TileBlock, TileCoord, TileIdx
+    AreaId, AreaPosition, CollisionType, ColorIdx, ColorRGB, ColorValue, Focus, Palette, PaletteId,
+    PaletteIdx, PixelCoord, Tile, TileBlock, TileCoord, TileIdx,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SelectionSource {
     MainArea,
+    SideArea,
     Tileset,
 }
 
@@ -89,7 +91,7 @@ pub enum Message {
         coords: Point<PixelCoord>,
         color_idx: ColorIdx,
     },
-    SelectArea(String),
+    SelectMainArea(String),
     AddAreaDialogue,
     SetAddAreaName(String),
     SetAddAreaSizeX(u8),
@@ -108,13 +110,12 @@ pub enum Message {
     EditAreaBGGreen(ColorValue),
     EditAreaBGBlue(ColorValue),
     EditAreaBGColor {
-        area_name: String,
-        theme_name: String,
+        area_id: AreaId,
         color: ColorRGB,
     },
     DeleteAreaDialogue,
     DeleteArea(String),
-    SelectTheme(String),
+    SelectTheme(AreaPosition, String),
     AddThemeDialogue,
     SetAddThemeName(String),
     AddTheme(String),
@@ -130,8 +131,8 @@ pub enum Message {
     ProgressTileSelection(Point<TileCoord>),
     EndTileSelection(Point<TileCoord>),
     AreaBrush {
-        area: String,
-        theme: String,
+        position: AreaPosition,
+        area_id: AreaId,
         coords: Point<TileCoord>,
         selection: TileBlock,
     },

@@ -1,10 +1,10 @@
 Some features still needed:
-- show palettes used by room
-- used different key instead of CTRL for identifying tiles/colors
 - Swap tiles (within and between palettes), updating area data
 - Way to open a second area/scratch in side panel (instead of palette/tileset editor)
+- when closing/opening editor, remember which areas were open.
 - overlays
 - World editor
 - Export to ROM
 - add status bar to show cursor position & tile info? (e.g. palette, tile number, collision type, flip)
   - right clicking can show most of this info, but for a broken palette it won't be available.
+- show preview of brush onto tileset
