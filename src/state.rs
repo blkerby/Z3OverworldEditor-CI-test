@@ -230,6 +230,7 @@ pub enum Dialogue {
     RenameTheme { name: ThemeName },
     DeleteTheme,
     Help,
+    RebuildProject,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]

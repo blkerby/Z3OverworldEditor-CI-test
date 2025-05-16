@@ -10,7 +10,7 @@ use crate::{
     message::{Message, SelectionSource},
     persist::{
         self, copy_area_theme, delete_area, delete_area_theme, delete_palette, load_area,
-        load_area_list, rename_area, rename_area_theme, save_area,
+        load_area_list, rename_area, rename_area_theme, save_area, save_area_png,
     },
     state::{
         Area, AreaId, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen,
@@ -116,6 +116,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
         };
     }
     match message {
+        Message::Nothing => {}
         Message::Event(event) => match event {
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(key::Named::Tab),
@@ -249,20 +250,29 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                             state.area_names.iter().position(|x| x == &area_id.area)
                         {
                             if area_idx + 1 < state.area_names.len() {
-                                state.switch_area(
+                                return Ok(Some(Task::done(Message::SelectArea(
                                     position,
-                                    &AreaId {
-                                        area: state.area_names[area_idx + 1].clone(),
-                                        theme: area_id.theme.clone(),
-                                    },
-                                )?;
+                                    state.area_names[area_idx + 1].clone(),
+                                ))));
                             }
                         } else {
                             bail!("Area not found: {}", area_id.area);
                         }
                     }
-                    Focus::PickTheme(_) => {
-                        // TODO: Handle making selections with keyboard:
+                    Focus::PickTheme(position) => {
+                        let area_id = state.area_id(position);
+                        if let Some(theme_idx) =
+                            state.theme_names.iter().position(|x| x == &area_id.theme)
+                        {
+                            if theme_idx + 1 < state.theme_names.len() {
+                                return Ok(Some(Task::done(Message::SelectTheme(
+                                    position,
+                                    state.theme_names[theme_idx + 1].clone(),
+                                ))));
+                            }
+                        } else {
+                            bail!("Area not found: {}", area_id.area);
+                        }
                     }
                     Focus::Area(_) => {
                         // TODO: Handle making selections with keyboard:
@@ -307,20 +317,29 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                             state.area_names.iter().position(|x| x == &area_id.area)
                         {
                             if area_idx > 0 {
-                                state.switch_area(
+                                return Ok(Some(Task::done(Message::SelectArea(
                                     position,
-                                    &AreaId {
-                                        area: state.area_names[area_idx - 1].clone(),
-                                        theme: area_id.theme.clone(),
-                                    },
-                                )?;
+                                    state.area_names[area_idx - 1].clone(),
+                                ))));
                             }
                         } else {
                             bail!("Area not found: {}", area_id.area);
                         }
                     }
-                    Focus::PickTheme(_) => {
-                        // TODO: Handle making selections with keyboard:
+                    Focus::PickTheme(position) => {
+                        let area_id = state.area_id(position);
+                        if let Some(theme_idx) =
+                            state.theme_names.iter().position(|x| x == &area_id.theme)
+                        {
+                            if theme_idx > 0 {
+                                return Ok(Some(Task::done(Message::SelectTheme(
+                                    position,
+                                    state.theme_names[theme_idx - 1].clone(),
+                                ))));
+                            }
+                        } else {
+                            bail!("Area not found: {}", area_id.area);
+                        }
                     }
                     Focus::Area(_) => {
                         // TODO: Handle making selections with keyboard:
@@ -355,58 +374,70 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             }
             Event::Keyboard(keyboard::Event::KeyPressed {
                 modified_key: keyboard::Key::Character(c),
+                modifiers,
                 ..
-            }) => match c.as_str() {
-                "b" => {
-                    state.brush_mode = true;
-                }
-                "s" => {
-                    state.brush_mode = false;
-                }
-                "t" => {
-                    state.side_panel_view = SidePanelView::Tileset;
-                }
-                "a" => {
-                    state.side_panel_view = SidePanelView::Area;
-                }
-                "h" => {
-                    for i in 0..state.selected_tile_block.size.1 as usize {
-                        state.selected_tile_block.palettes[i].reverse();
-                        state.selected_tile_block.tiles[i].reverse();
-                        state.selected_tile_block.flips[i].reverse();
-                        state.selected_gfx[i].reverse();
-                        for j in 0..state.selected_tile_block.size.0 as usize {
-                            state.selected_tile_block.flips[i][j] =
-                                state.selected_tile_block.flips[i][j].flip_horizontally();
-                            state.selected_gfx[i][j] =
-                                Flip::Horizontal.apply_to_tile(state.selected_gfx[i][j]);
+            }) => {
+                if modifiers.control() {
+                    match c.as_str() {
+                        "r" => {
+                            return Ok(Some(Task::done(Message::RebuildProjectDialogue)));
                         }
+                        _ => {}
+                    }
+                } else {
+                    match c.as_str() {
+                        "b" => {
+                            state.brush_mode = true;
+                        }
+                        "s" => {
+                            state.brush_mode = false;
+                        }
+                        "t" => {
+                            state.side_panel_view = SidePanelView::Tileset;
+                        }
+                        "a" => {
+                            state.side_panel_view = SidePanelView::Area;
+                        }
+                        "h" => {
+                            for i in 0..state.selected_tile_block.size.1 as usize {
+                                state.selected_tile_block.palettes[i].reverse();
+                                state.selected_tile_block.tiles[i].reverse();
+                                state.selected_tile_block.flips[i].reverse();
+                                state.selected_gfx[i].reverse();
+                                for j in 0..state.selected_tile_block.size.0 as usize {
+                                    state.selected_tile_block.flips[i][j] =
+                                        state.selected_tile_block.flips[i][j].flip_horizontally();
+                                    state.selected_gfx[i][j] =
+                                        Flip::Horizontal.apply_to_tile(state.selected_gfx[i][j]);
+                                }
+                            }
+                        }
+                        "v" => {
+                            state.selected_tile_block.palettes.reverse();
+                            state.selected_tile_block.tiles.reverse();
+                            state.selected_tile_block.flips.reverse();
+                            state.selected_gfx.reverse();
+                            for i in 0..state.selected_tile_block.size.1 as usize {
+                                for j in 0..state.selected_tile_block.size.0 as usize {
+                                    state.selected_tile_block.flips[i][j] =
+                                        state.selected_tile_block.flips[i][j].flip_vertically();
+                                    state.selected_gfx[i][j] =
+                                        Flip::Vertical.apply_to_tile(state.selected_gfx[i][j]);
+                                }
+                            }
+                        }
+                        "-" => {
+                            state.global_config.pixel_size =
+                                (state.global_config.pixel_size - 1.0).max(MIN_PIXEL_SIZE);
+                        }
+                        "=" => {
+                            state.global_config.pixel_size =
+                                (state.global_config.pixel_size + 1.0).min(MAX_PIXEL_SIZE);
+                        }
+                        _ => {}
                     }
                 }
-                "v" => {
-                    state.selected_tile_block.palettes.reverse();
-                    state.selected_tile_block.tiles.reverse();
-                    state.selected_tile_block.flips.reverse();
-                    state.selected_gfx.reverse();
-                    for i in 0..state.selected_tile_block.size.1 as usize {
-                        for j in 0..state.selected_tile_block.size.0 as usize {
-                            state.selected_tile_block.flips[i][j] =
-                                state.selected_tile_block.flips[i][j].flip_vertically();
-                            state.selected_gfx[i][j] =
-                                Flip::Vertical.apply_to_tile(state.selected_gfx[i][j]);
-                        }
-                    }
-                }
-                "-" => {
-                    state.global_config.pixel_size =
-                        (state.global_config.pixel_size - 1.0).max(MIN_PIXEL_SIZE);
-                }
-                "=" => {
-                    state.global_config.pixel_size =
-                        (state.global_config.pixel_size + 1.0).min(MAX_PIXEL_SIZE);
-                }
-                _ => {}
-            },
+            }
             _ => {}
         },
         &Message::Focus(focus) => {
@@ -417,6 +448,29 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
         }
         Message::OpenProject => {
             return Ok(Some(Task::perform(open_project(), Message::ProjectOpened)));
+        }
+        Message::RebuildProjectDialogue => {
+            state.dialogue = Some(Dialogue::RebuildProject);
+            return Ok(Some(Task::done(Message::RebuildProject)));
+        }
+        Message::RebuildProject => {
+            // Save all area PNGs (which could be out-of-date, e.g. if a palette were updated or a new theme created)
+            for theme in &state.theme_names.clone() {
+                for area_name in &state.area_names.clone() {
+                    let area_id = AreaId {
+                        theme: theme.clone(),
+                        area: area_name.clone(),
+                    };
+                    if state.areas.contains_key(&area_id) {
+                        save_area_png(state, &area_id)?;
+                    } else {
+                        state.load_area(&area_id)?;
+                        save_area_png(state, &area_id)?;
+                        state.areas.remove(&area_id);
+                    }
+                }
+            }
+            state.dialogue = None;
         }
         &Message::WindowClose(id) => {
             persist::save_project(state)?;

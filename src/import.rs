@@ -12,7 +12,7 @@ use crate::{
     persist::{load_area, load_project, save_area_json, save_area_png, save_project},
     state::{
         Area, AreaId, AreaName, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId,
-        Screen, Tile,
+        PaletteIdx, Screen, Tile, TileIdx,
     },
     update::update_palette_order,
 };
@@ -140,7 +140,7 @@ impl Constants {
             tiles32_cnt: 8828,
             map_high_addr: SnesAddr(0x02F6B1),
             map_low_addr: SnesAddr(0x02F891),
-            map_cnt: 160,
+            map_cnt: 0x90,
             custom_map_main_pal_set_addr: None,
             map_aux_pal_set_addr: SnesAddr(0x00FD1C),
             special_map_pal_set_addr: SnesAddr(0x02E595),
@@ -173,7 +173,7 @@ impl Constants {
             tiles32_cnt: 8864,
             map_high_addr: SnesAddr(0x02F94D),
             map_low_addr: SnesAddr(0x02FB2D),
-            map_cnt: 160,
+            map_cnt: 0x90,
             custom_map_main_pal_set_addr: None,
             map_aux_pal_set_addr: SnesAddr(0x00FD1C),
             special_map_pal_set_addr: SnesAddr(0x02E831),
@@ -374,7 +374,7 @@ impl<'a> Importer<'a> {
     }
 
     fn import_all(&mut self) -> Result<()> {
-        let starting_palette_id = 100;
+        let starting_palette_id = self.state.palettes.iter().map(|x| x.id).max().unwrap() + 1;
         self.load_area_names()?;
         self.load_tile_types()?;
         self.import_all_palettes(starting_palette_id)?;
@@ -386,7 +386,7 @@ impl<'a> Importer<'a> {
         self.load_map_palettes()?;
         self.load_map_gfx()?;
         self.load_areas()?;
-        self.prune_palettes()?;
+        self.ensure_palette_full_rows()?;
         self.assign_bg_colors()?;
         save_project(self.state)?;
         load_project(self.state)?;
@@ -405,7 +405,10 @@ impl<'a> Importer<'a> {
 
     fn load_area_names(&mut self) -> Result<()> {
         for area_name in &self.state.area_names {
-            let area_id = AreaId { area: area_name.clone(), theme: self.theme.clone() };
+            let area_id = AreaId {
+                area: area_name.clone(),
+                theme: self.theme.clone(),
+            };
             let area = load_area(self.state, &area_id)?;
             if let Some(id) = area.vanilla_map_id {
                 self.area_name_by_map_id.insert(id, area_name.clone());
@@ -414,13 +417,7 @@ impl<'a> Importer<'a> {
         Ok(())
     }
 
-    fn import_palette(
-        &mut self,
-        addr: PcAddr,
-        size: usize,
-        name: &str,
-        id: PaletteId,
-    ) -> Result<()> {
+    fn load_palette(&mut self, addr: PcAddr, size: usize) -> Result<[ColorRGB; 16]> {
         let mut colors = [[0, 0, 0]; 16];
         for i in 0..size {
             let c = self.rom.read_u16(addr + i as u32 * 2)?;
@@ -429,17 +426,10 @@ impl<'a> Importer<'a> {
             let b = (c >> 10) & 31;
             colors[i + 1] = [r as ColorValue, g as ColorValue, b as ColorValue];
         }
-        self.state.palettes.push(Palette {
-            modified: true,
-            name: name.to_string(),
-            id,
-            colors,
-            tiles: vec![Tile::default(); 16],
-        });
-        Ok(())
+        Ok(colors)
     }
 
-    fn import_all_palettes(&mut self, mut id: PaletteId) -> Result<()> {
+    fn import_all_palettes(&mut self, mut next_id: PaletteId) -> Result<()> {
         let palette_groups = [
             ("HUD", self.constants.hud_palettes_addr, 1, 2, 15),
             ("Main", self.constants.main_palettes_addr, 6, 5, 7),
@@ -447,17 +437,39 @@ impl<'a> Importer<'a> {
             ("Animated", self.constants.animated_palettes_addr, 14, 1, 7),
         ];
 
-        self.state.palettes.clear();
+        let mut pal_by_colors: HashMap<[ColorRGB; 16], PaletteId> = HashMap::new();
+        for pal in &self.state.palettes {
+            let mut colors = pal.colors;
+            colors[0] = [0, 0, 0];
+            let _ = pal_by_colors.try_insert(colors, pal.id);
+        }
+
         for (group_name, base_addr, cnt_pal, cnt_rows, size) in palette_groups {
             let base_addr: PcAddr = base_addr.into();
             for i in 0..cnt_pal {
                 let mut palette_ids: Vec<PaletteId> = vec![];
                 for j in 0..cnt_rows {
-                    let name = format!("{} {:x}-{}", group_name, i, j);
                     let addr = base_addr + ((i * cnt_rows + j) * size) * 2;
-                    palette_ids.push(id);
-                    self.import_palette(addr, size as usize, &name, id)?;
-                    id += 1;
+                    let colors = self.load_palette(addr, size as usize)?;
+
+                    if let Some(&id) = pal_by_colors.get(&colors) {
+                        palette_ids.push(id);
+                    } else {
+                        let mut name = format!("{} {:x}-{}", group_name, i, j);
+                        if self.theme != "Base" {
+                            name += &format!(" ({})", self.theme);
+                        }
+                        self.state.palettes.push(Palette {
+                            modified: true,
+                            name,
+                            id: next_id,
+                            colors,
+                            tiles: vec![],
+                        });
+                        pal_by_colors.insert(colors, next_id);
+                        palette_ids.push(next_id);
+                        next_id += 1;
+                    }
                 }
                 match group_name {
                     "HUD" => {
@@ -627,14 +639,14 @@ impl<'a> Importer<'a> {
         parents[130] = 129;
         parents[137] = 129;
         parents[138] = 129;
-        parents[148] = 128;
-        parents[149] = 3;
-        parents[150] = 91;
-        parents[151] = 0;
-        parents[156] = 67;
-        parents[157] = 0;
-        parents[158] = 0;
-        parents[159] = 44;
+        // parents[148] = 128;
+        // parents[149] = 3;
+        // parents[150] = 91;
+        // parents[151] = 0;
+        // parents[156] = 67;
+        // parents[157] = 0;
+        // parents[158] = 0;
+        // parents[159] = 44;
 
         self.map_parents = parents;
         Ok(())
@@ -680,6 +692,13 @@ impl<'a> Importer<'a> {
                 aux1 = 0;
             }
             if aux2 >= 20 {
+                info!(
+                    "{:x}: {} {} {}",
+                    parent,
+                    self.constants.pal_set_addr,
+                    prev_pal_set,
+                    self.constants.pal_set_addr + prev_pal_set as u32 * 4 + 1
+                );
                 aux2 = rom
                     .read_u8((self.constants.pal_set_addr + prev_pal_set as u32 * 4 + 1).into())?;
             }
@@ -760,11 +779,27 @@ impl<'a> Importer<'a> {
         let tile32_offsets = [(0, 0), (2, 0), (0, 2), (2, 2)];
         let tile16_offsets = [(0, 0), (1, 0), (0, 1), (1, 1)];
 
-        let mut tile_lookup: Vec<HashMap<Tile, (usize, Flip)>> =
+        let mut tile_lookup: Vec<HashMap<Tile, (TileIdx, Flip)>> =
             vec![HashMap::new(); self.state.palettes.len()];
-        let mut used_tiles: Vec<Vec<Tile>> = vec![vec![]; self.state.palettes.len()];
-        let mut h_flippable: Vec<Vec<bool>> = vec![vec![]; self.state.palettes.len()];
-        let mut v_flippable: Vec<Vec<bool>> = vec![vec![]; self.state.palettes.len()];
+
+        fn strip_tile(mut tile: Tile) -> Tile {
+            // We clear these fields when looking up matching tiles, since these
+            // fields will vary over the course of processing.
+            tile.h_flippable = false;
+            tile.v_flippable = false;
+            tile
+        }
+
+        for palette_idx in 0..self.state.palettes.len() {
+            for (idx, tile) in self.state.palettes[palette_idx].tiles.iter().enumerate() {
+                for flip in [Flip::None, Flip::Horizontal, Flip::Vertical, Flip::Both] {
+                    tile_lookup[palette_idx].insert(
+                        strip_tile(flip.apply_to_tile(tile.clone())),
+                        (idx as TileIdx, flip),
+                    );
+                }
+            }
+        }
 
         for parent in 0..=0x81 {
             if self.map_parents[parent] as usize != parent {
@@ -811,14 +846,12 @@ impl<'a> Importer<'a> {
 
             let area_name = match self.area_name_by_map_id.get(&(parent as u8)) {
                 Some(name) => name.clone(),
-                None => {
-                    match world_idx {
-                        0 => format!("{:02X} Light World", parent),
-                        1 => format!("{:02X} Dark World", parent),
-                        2 => format!("{:02X} Special World", parent),
-                        _ => bail!("unexpected world_idx: {}", world_idx),
-                    }
-                }
+                None => match world_idx {
+                    0 => format!("{:02X} Light World", parent),
+                    1 => format!("{:02X} Dark World", parent),
+                    2 => format!("{:02X} Special World", parent),
+                    _ => bail!("unexpected world_idx: {}", world_idx),
+                },
             };
             let mut area: Area = Area {
                 modified: false,
@@ -898,18 +931,19 @@ impl<'a> Importer<'a> {
                                     {
                                         Some(x) => *x,
                                         None => {
-                                            let idx = used_tiles[palette_idx].len();
-                                            used_tiles[palette_idx].push(tile);
-                                            h_flippable[palette_idx].push(false);
-                                            v_flippable[palette_idx].push(false);
+                                            let idx = self.state.palettes[palette_idx].tiles.len()
+                                                as TileIdx;
+                                            self.state.palettes[palette_idx].tiles.push(tile);
                                             for flip in [
                                                 Flip::None,
                                                 Flip::Horizontal,
                                                 Flip::Vertical,
                                                 Flip::Both,
                                             ] {
-                                                tile_lookup[palette_idx]
-                                                    .insert(flip.apply_to_tile(tile), (idx, flip));
+                                                tile_lookup[palette_idx].insert(
+                                                    strip_tile(flip.apply_to_tile(tile.clone())),
+                                                    (idx, flip),
+                                                );
                                             }
                                             (idx, Flip::None)
                                         }
@@ -918,14 +952,22 @@ impl<'a> Importer<'a> {
                                     match flip {
                                         Flip::None => {}
                                         Flip::Horizontal => {
-                                            h_flippable[palette_idx][tile_idx] = true;
+                                            self.state.palettes[palette_idx].tiles
+                                                [tile_idx as usize]
+                                                .h_flippable = true;
                                         }
                                         Flip::Vertical => {
-                                            v_flippable[palette_idx][tile_idx] = true;
+                                            self.state.palettes[palette_idx].tiles
+                                                [tile_idx as usize]
+                                                .v_flippable = true;
                                         }
                                         Flip::Both => {
-                                            h_flippable[palette_idx][tile_idx] = true;
-                                            v_flippable[palette_idx][tile_idx] = true;
+                                            self.state.palettes[palette_idx].tiles
+                                                [tile_idx as usize]
+                                                .h_flippable = true;
+                                            self.state.palettes[palette_idx].tiles
+                                                [tile_idx as usize]
+                                                .v_flippable = true;
                                         }
                                     }
 
@@ -954,26 +996,15 @@ impl<'a> Importer<'a> {
                 .set_area(crate::state::AreaPosition::Main, area)?;
             save_area_json(self.state, &self.state.main_area_id)?;
         }
-        for i in 0..self.state.palettes.len() {
-            for j in 0..used_tiles[i].len() {
-                used_tiles[i][j].h_flippable = h_flippable[i][j];
-                used_tiles[i][j].v_flippable = v_flippable[i][j];
-            }
-            let n = used_tiles[i].len();
-            used_tiles[i].resize((n + 15) / 16 * 16, Tile::default());
-            self.state.palettes[i].tiles = used_tiles[i].clone();
-        }
         Ok(())
     }
 
-    fn prune_palettes(&mut self) -> Result<()> {
-        let mut new_palettes = vec![];
-        for pal_idx in 0..self.state.palettes.len() {
-            if self.state.palettes[pal_idx].tiles.len() > 0 {
-                new_palettes.push(self.state.palettes[pal_idx].clone());
-            }
+    fn ensure_palette_full_rows(&mut self) -> Result<()> {
+        for pal in &mut self.state.palettes {
+            let size = ((pal.tiles.len() + 15) / 16 * 16).max(16);
+            pal.tiles.resize(size, Tile::default());
+            pal.modified = true;
         }
-        self.state.palettes = new_palettes;
         Ok(())
     }
 

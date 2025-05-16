@@ -15,11 +15,14 @@ pub enum SelectionSource {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Nothing,
     Event(iced::Event),
     Focus(Focus),
     WindowClose(iced::window::Id),
     SaveProject,
     OpenProject,
+    RebuildProjectDialogue,
+    RebuildProject,
     ProjectOpened(Option<PathBuf>),
     SettingsDialogue,
     HelpDialogue,

@@ -133,6 +133,16 @@ pub fn help_view(_state: &EditorState) -> Element<Message> {
         .into()
 }
 
+pub fn rebuild_project_view(_state: &EditorState) -> Element<Message> {
+    container(text(
+        "Please wait while the project PNG files are exported.",
+    ))
+    .width(500)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
+}
+
 pub fn view_dialogue<'a>(
     state: &'a EditorState,
     main_view: Element<'a, Message>,
@@ -172,12 +182,13 @@ pub fn view_dialogue<'a>(
                 import_rom_confirm_view(state),
                 Message::HideModal,
             ),
-            Dialogue::ImportROMProgress => modal(
-                main_view,
-                import_rom_progress_view(state),
-                Message::HideModal,
-            ),
+            Dialogue::ImportROMProgress => {
+                modal(main_view, import_rom_progress_view(state), Message::Nothing)
+            }
             Dialogue::Help => modal(main_view, help_view(state), Message::HideModal),
+            Dialogue::RebuildProject => {
+                modal(main_view, rebuild_project_view(state), Message::Nothing)
+            }
         }
     } else {
         main_view

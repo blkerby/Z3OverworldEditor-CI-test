@@ -18,11 +18,14 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
     // changes to the project data (i.e. palettes and areas), not to
     // transient editor state.
     let action = match message {
+        Message::Nothing => UndoAction::None,
         Message::Event(_) => UndoAction::None,
         Message::Focus(_) => UndoAction::None,
         Message::WindowClose(_) => UndoAction::None,
         Message::SaveProject => UndoAction::None,
         Message::OpenProject => UndoAction::None,
+        Message::RebuildProjectDialogue => UndoAction::None,
+        Message::RebuildProject => UndoAction::None,
         Message::ProjectOpened(_) => UndoAction::Irreversible,
         Message::SettingsDialogue => UndoAction::None,
         Message::HelpDialogue => UndoAction::None,
