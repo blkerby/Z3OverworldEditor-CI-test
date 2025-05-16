@@ -1,5 +1,7 @@
 Some features still needed:
+- import ROM into selected theme, and match against vanilla_map_id and existing palettes
 - Swap tiles (within and between palettes), updating area data
+- Ctrl-R to rebuild all the PNG (in case palette was changed, which could affect everything).
 - Way to open a second area/scratch in side panel (instead of palette/tileset editor)
 - when closing/opening editor, remember which areas were open.
 - overlays

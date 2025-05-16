@@ -141,6 +141,7 @@ pub struct Area {
     pub name: AreaName,
     #[serde(skip_serializing, skip_deserializing)]
     pub theme: ThemeName,
+    pub vanilla_map_id: Option<u8>,
     pub bg_color: ColorRGB,
     // X and Y dimensions, measured in number of screens:
     pub size: (u8, u8),
@@ -228,6 +229,7 @@ pub enum Dialogue {
     AddTheme { name: ThemeName },
     RenameTheme { name: ThemeName },
     DeleteTheme,
+    Help,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -245,10 +247,9 @@ pub struct TileBlock {
 pub enum Focus {
     #[default]
     None,
-    MainPickArea,
-    MainPickTheme,
-    MainArea,
-    SideArea,
+    PickArea(AreaPosition),
+    PickTheme(AreaPosition),
+    Area(AreaPosition),
     PickPalette,
     PaletteColor,
     GraphicsPixel,
@@ -395,6 +396,7 @@ impl EditorState {
         // Unload areas that aren't currently in use.
         let mut delete_keys: HashSet<AreaId> = self.areas.keys().cloned().collect();
         delete_keys.remove(&self.main_area_id);
+        delete_keys.remove(&self.side_area_id);
         for key in delete_keys {
             save_area(self, &key)?;
             self.areas.remove(&key);
@@ -493,7 +495,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         tile_idx: None,
         selected_tile: Tile::default(),
         identify_tile: false,
-        selection_source: SelectionSource::MainArea,
+        selection_source: SelectionSource::Area(AreaPosition::Main),
         start_coords: None,
         end_coords: None,
         selected_tile_block: TileBlock::default(),

@@ -25,6 +25,7 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
         Message::OpenProject => UndoAction::None,
         Message::ProjectOpened(_) => UndoAction::Irreversible,
         Message::SettingsDialogue => UndoAction::None,
+        Message::HelpDialogue => UndoAction::None,
         Message::SetPixelSize(_) => UndoAction::None,
         Message::CloseDialogue => UndoAction::None,
         Message::ImportDialogue => UndoAction::None,
@@ -200,7 +201,7 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
                 color_idx: c,
             })
         }
-        Message::SelectMainArea(_) => UndoAction::None,
+        Message::SelectArea(_, _) => UndoAction::None,
         Message::AddAreaDialogue => UndoAction::None,
         Message::SetAddAreaName(_) => UndoAction::None,
         Message::SetAddAreaSizeX(_) => UndoAction::None,

@@ -13,8 +13,8 @@ use crate::{
         load_area_list, rename_area, rename_area_theme, save_area,
     },
     state::{
-        Area, AreaId, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, Tile,
-        TileBlock, TileIdx, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
+        Area, AreaId, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen,
+        SidePanelView, Tile, TileBlock, TileIdx, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
     },
     undo::{get_undo_action, UndoAction},
     view::{open_project, open_rom},
@@ -130,10 +130,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             }
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.focus {
                 Focus::None => {}
-                Focus::MainPickArea => {}
-                Focus::MainPickTheme => {}
-                Focus::MainArea => {}
-                Focus::SideArea => {}
+                Focus::PickArea(_) => {}
+                Focus::PickTheme(_) => {}
+                Focus::Area(_) => {}
                 Focus::PickPalette => {}
                 Focus::PaletteColor | Focus::GraphicsPixel => {
                     state.identify_color = modifiers.control();
@@ -160,12 +159,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             }) => {
                 match state.focus {
                     Focus::None => {}
-                    Focus::MainPickArea => {}
-                    Focus::MainPickTheme => {}
-                    Focus::MainArea => {
-                        // TODO: Handle making selections with keyboard:
-                    }
-                    Focus::SideArea => {
+                    Focus::PickArea(_) => {}
+                    Focus::PickTheme(_) => {}
+                    Focus::Area(_) => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {}
@@ -205,12 +201,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             }) => {
                 match state.focus {
                     Focus::None => {}
-                    Focus::MainPickArea => {}
-                    Focus::MainPickTheme => {}
-                    Focus::MainArea => {
-                        // TODO: Handle making selections with keyboard:
-                    }
-                    Focus::SideArea => {
+                    Focus::PickArea(_) => {}
+                    Focus::PickTheme(_) => {}
+                    Focus::Area(_) => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {}
@@ -250,14 +243,14 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             }) => {
                 match state.focus {
                     Focus::None => {}
-                    Focus::MainPickArea => {
-                        let area_id = &state.main_area_id;
+                    Focus::PickArea(position) => {
+                        let area_id = state.area_id(position);
                         if let Some(area_idx) =
                             state.area_names.iter().position(|x| x == &area_id.area)
                         {
                             if area_idx + 1 < state.area_names.len() {
                                 state.switch_area(
-                                    AreaPosition::Main,
+                                    position,
                                     &AreaId {
                                         area: state.area_names[area_idx + 1].clone(),
                                         theme: area_id.theme.clone(),
@@ -268,13 +261,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                             bail!("Area not found: {}", area_id.area);
                         }
                     }
-                    Focus::MainPickTheme => {
+                    Focus::PickTheme(_) => {
                         // TODO: Handle making selections with keyboard:
                     }
-                    Focus::MainArea => {
-                        // TODO: Handle making selections with keyboard:
-                    }
-                    Focus::SideArea => {
+                    Focus::Area(_) => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {
@@ -311,14 +301,14 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             }) => {
                 match state.focus {
                     Focus::None => {}
-                    Focus::MainPickArea => {
-                        let area_id = &state.main_area_id;
+                    Focus::PickArea(position) => {
+                        let area_id = state.area_id(position);
                         if let Some(area_idx) =
                             state.area_names.iter().position(|x| x == &area_id.area)
                         {
                             if area_idx - 1 > 0 {
                                 state.switch_area(
-                                    AreaPosition::Main,
+                                    position,
                                     &AreaId {
                                         area: state.area_names[area_idx - 1].clone(),
                                         theme: area_id.theme.clone(),
@@ -329,13 +319,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                             bail!("Area not found: {}", area_id.area);
                         }
                     }
-                    Focus::MainPickTheme => {
+                    Focus::PickTheme(_) => {
                         // TODO: Handle making selections with keyboard:
                     }
-                    Focus::MainArea => {
-                        // TODO: Handle making selections with keyboard:
-                    }
-                    Focus::SideArea => {
+                    Focus::Area(_) => {
                         // TODO: Handle making selections with keyboard:
                     }
                     Focus::PickPalette => {
@@ -375,6 +362,12 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 }
                 "s" => {
                     state.brush_mode = false;
+                }
+                "t" => {
+                    state.side_panel_view = SidePanelView::Tileset;
+                }
+                "a" => {
+                    state.side_panel_view = SidePanelView::Area;
                 }
                 "h" => {
                     for i in 0..state.selected_tile_block.size.1 as usize {
@@ -455,6 +448,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
         }
         Message::SettingsDialogue => {
             state.dialogue = Some(Dialogue::Settings);
+        }
+        Message::HelpDialogue => {
+            state.dialogue = Some(Dialogue::Help);
         }
         &Message::SetPixelSize(pixel_size) => {
             state.global_config.pixel_size = pixel_size;
@@ -794,10 +790,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             pal.tiles[tile_idx as usize].pixels[coords.y as usize][coords.x as usize] = color_idx;
             pal.modified = true;
         }
-        Message::SelectMainArea(name) => {
+        &Message::SelectArea(position, ref name) => {
             let area_id = &state.main_area_id;
             state.switch_area(
-                AreaPosition::Main,
+                position,
                 &AreaId {
                     area: name.clone(),
                     theme: area_id.theme.clone(),
@@ -849,6 +845,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                         name: name.clone(),
                         theme,
                         size: *size,
+                        vanilla_map_id: state.areas[&state.main_area_id].vanilla_map_id,
                         bg_color: state.areas[&state.main_area_id].bg_color,
                         screens: (0..size.0)
                             .cartesian_product(0..size.1)
@@ -1080,11 +1077,8 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             let bottom = p0.1.max(p1.1);
 
             match state.selection_source {
-                SelectionSource::MainArea => {
-                    state.focus = Focus::MainArea;
-                }
-                SelectionSource::SideArea => {
-                    state.focus = Focus::SideArea;
+                SelectionSource::Area(position) => {
+                    state.focus = Focus::Area(position);
                 }
                 SelectionSource::Tileset => {
                     if left == right && top == bottom {
@@ -1105,15 +1099,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 let mut flip_row: Vec<Flip> = vec![];
                 for x in left..=right {
                     match state.selection_source {
-                        SelectionSource::MainArea => {
-                            pal_row.push(state.main_area().get_palette(x, y)?);
-                            tile_row.push(state.main_area().get_tile(x, y)?);
-                            flip_row.push(state.main_area().get_flip(x, y)?);
-                        }
-                        SelectionSource::SideArea => {
-                            pal_row.push(state.side_area().get_palette(x, y)?);
-                            tile_row.push(state.side_area().get_tile(x, y)?);
-                            flip_row.push(state.side_area().get_flip(x, y)?);
+                        SelectionSource::Area(position) => {
+                            pal_row.push(state.area(position).get_palette(x, y)?);
+                            tile_row.push(state.area(position).get_tile(x, y)?);
+                            flip_row.push(state.area(position).get_flip(x, y)?);
                         }
                         SelectionSource::Tileset => {
                             pal_row.push(state.palettes[state.palette_idx].id);

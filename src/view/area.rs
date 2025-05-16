@@ -116,7 +116,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                                 canvas::event::Status::Captured,
                                 Some(Message::StartTileSelection(
                                     clamped_position_in(p, bounds, self.area.size, self.pixel_size),
-                                    crate::message::SelectionSource::MainArea,
+                                    crate::message::SelectionSource::Area(self.position),
                                 )),
                             );
                         }
@@ -480,7 +480,7 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
             .width((num_cols as f32 * 8.0 + 2.0) * pixel_size)
             .height((num_rows as f32 * 8.0 + 2.0) * pixel_size),
             canvas(AreaSelect {
-                active: state.selection_source == SelectionSource::MainArea
+                active: state.selection_source == SelectionSource::Area(position)
                     && state.start_coords.is_some()
                     && state.end_coords.is_some()
                     && !state.brush_mode,
@@ -505,15 +505,15 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
     .into()
 }
 
-pub fn area_controls(state: &EditorState) -> Element<Message> {
+pub fn main_area_controls(state: &EditorState) -> Element<Message> {
     row![
         text("Area"),
         pick_list(
             state.area_names.clone(),
             Some(state.main_area().name.clone()),
-            Message::SelectMainArea
+            |x| Message::SelectArea(AreaPosition::Main, x)
         )
-        .on_open(Message::Focus(Focus::MainPickArea))
+        .on_open(Message::Focus(Focus::PickArea(AreaPosition::Main)))
         .width(200),
         button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
             .style(button::success)
@@ -526,13 +526,36 @@ pub fn area_controls(state: &EditorState) -> Element<Message> {
             Some(state.main_area().theme.clone()),
             |x| Message::SelectTheme(AreaPosition::Main, x)
         )
-        .on_open(Message::Focus(Focus::MainPickTheme))
+        .on_open(Message::Focus(Focus::PickTheme(AreaPosition::Main)))
         .width(200),
         button(text("\u{F64D}").font(iced_fonts::BOOTSTRAP_FONT))
             .style(button::success)
             .on_press(Message::AddThemeDialogue),
         button(text("\u{F4CB}").font(iced_fonts::BOOTSTRAP_FONT))
             .on_press(Message::RenameThemeDialogue),
+    ]
+    .spacing(10)
+    .clip(true)
+    .align_y(iced::alignment::Vertical::Center)
+    .into()
+}
+
+pub fn side_area_controls(state: &EditorState) -> Element<Message> {
+    row![
+        pick_list(
+            state.area_names.clone(),
+            Some(state.side_area().name.clone()),
+            |x| Message::SelectArea(AreaPosition::Side, x)
+        )
+        .on_open(Message::Focus(Focus::PickArea(AreaPosition::Side)))
+        .width(200),
+        pick_list(
+            state.theme_names.clone(),
+            Some(state.main_area().theme.clone()),
+            |x| Message::SelectTheme(AreaPosition::Side, x)
+        )
+        .on_open(Message::Focus(Focus::PickTheme(AreaPosition::Side)))
+        .width(200),
     ]
     .spacing(10)
     .clip(true)

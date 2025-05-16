@@ -442,6 +442,7 @@ pub fn load_project(state: &mut EditorState) -> Result<()> {
         theme: state.theme_names[0].clone(),
     };
     state.switch_area(AreaPosition::Main, &area_id)?;
+    state.switch_area(AreaPosition::Side, &area_id)?;
     state.palette_idx = 0;
     state.color_idx = None;
     state.tile_idx = None;

@@ -9,8 +9,7 @@ use crate::state::{
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SelectionSource {
-    MainArea,
-    SideArea,
+    Area(AreaPosition),
     Tileset,
 }
 
@@ -23,6 +22,7 @@ pub enum Message {
     OpenProject,
     ProjectOpened(Option<PathBuf>),
     SettingsDialogue,
+    HelpDialogue,
     SetPixelSize(f32),
     CloseDialogue,
     ImportDialogue,
@@ -91,7 +91,7 @@ pub enum Message {
         coords: Point<PixelCoord>,
         color_idx: ColorIdx,
     },
-    SelectMainArea(String),
+    SelectArea(AreaPosition, String),
     AddAreaDialogue,
     SetAddAreaName(String),
     SetAddAreaSizeX(u8),

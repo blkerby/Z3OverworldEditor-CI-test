@@ -801,6 +801,7 @@ impl<'a> Importer<'a> {
                     _ => bail!("unexpected world_idx: {}", world_idx),
                 },
                 theme: "Base".to_string(),
+                vanilla_map_id: Some(parent as u8),
                 bg_color,
                 size: (size.0 * 2, size.1 * 2),
                 screens: vec![],

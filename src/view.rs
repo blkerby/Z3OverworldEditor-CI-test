@@ -7,22 +7,29 @@ mod tiles;
 use std::path::PathBuf;
 
 use area::{
-    add_area_view, add_theme_view, area_controls, area_grid_view, delete_area_view,
-    delete_theme_view, edit_area_view, rename_theme_view,
+    add_area_view, add_theme_view, area_grid_view, delete_area_view, delete_theme_view,
+    edit_area_view, main_area_controls, rename_theme_view, side_area_controls,
 };
 use graphics::graphics_view;
 use iced::{
-    widget::{button, center, column, container, mouse_area, opaque, row, stack, text, Space},
-    Element, Length, Theme,
+    alignment::Vertical,
+    widget::{
+        button, center, column, container, horizontal_space, mouse_area, opaque, row, stack, text,
+        Column, Space,
+    },
+    Element, Font, Length, Theme,
 };
 use iced_aw::quad;
-use palette::{add_palette_view, delete_palette_view, rename_palette_view, selected_palette_view, used_palettes_view};
+use palette::{
+    add_palette_view, delete_palette_view, rename_palette_view, selected_palette_view,
+    used_palettes_view,
+};
 use settings::{import_rom_confirm_view, import_rom_progress_view, settings_view};
 use tiles::tile_view;
 
 use crate::{
     message::Message,
-    state::{AreaPosition, Dialogue, EditorState},
+    state::{AreaPosition, Dialogue, EditorState, SidePanelView},
 };
 
 pub async fn open_project() -> Option<PathBuf> {
@@ -95,92 +102,136 @@ fn vertical_separator() -> quad::Quad {
     }
 }
 
+pub fn help_view(_state: &EditorState) -> Element<Message> {
+    let controls = vec![
+        ("s", "Select tool", "copy tiles, colors, pixels"),
+        ("b", "Brush tool", "paste tiles, colors, pixels"),
+        ("h", "Horizontal flip", "flip selection horizontally"),
+        ("v", "Vertical flip", "flip selection horizontally"),
+        ("t", "Tileset view", "show palettes/tilesets in side panel"),
+        ("a", "Area view", "show secondary area in side panel"),
+    ];
+    let mut col = Column::new();
+    col = col.push(text("Essential keyboard controls:"));
+    for (key, name, desc) in controls {
+        col = col.push(
+            row![
+                text(key).width(20).font(Font {
+                    weight: iced::font::Weight::ExtraBold,
+                    ..Default::default()
+                }),
+                text(format!("{}: {}", name, desc)).width(400),
+            ]
+            .align_y(Vertical::Center),
+        );
+    }
+
+    container(col.spacing(10))
+        .width(450)
+        .padding(25)
+        .style(modal_background_style)
+        .into()
+}
+
+pub fn view_dialogue<'a>(
+    state: &'a EditorState,
+    main_view: Element<'a, Message>,
+) -> Element<'a, Message> {
+    if let Some(dialogue) = &state.dialogue {
+        match dialogue {
+            Dialogue::Settings => modal(main_view, settings_view(state), Message::HideModal),
+            Dialogue::AddPalette { name, id } => {
+                modal(main_view, add_palette_view(name, *id), Message::HideModal)
+            }
+            Dialogue::DeletePalette => {
+                modal(main_view, delete_palette_view(state), Message::HideModal)
+            }
+            Dialogue::RenamePalette { name } => modal(
+                main_view,
+                rename_palette_view(&state, name),
+                Message::HideModal,
+            ),
+            Dialogue::AddArea { name, size } => {
+                modal(main_view, add_area_view(name, *size), Message::HideModal)
+            }
+            Dialogue::EditArea { name } => {
+                modal(main_view, edit_area_view(state, name), Message::HideModal)
+            }
+            Dialogue::DeleteArea => modal(main_view, delete_area_view(state), Message::HideModal),
+            Dialogue::AddTheme { name } => {
+                modal(main_view, add_theme_view(name), Message::HideModal)
+            }
+            Dialogue::RenameTheme { name } => modal(
+                main_view,
+                rename_theme_view(state, name),
+                Message::HideModal,
+            ),
+            Dialogue::DeleteTheme => modal(main_view, delete_theme_view(state), Message::HideModal),
+            Dialogue::ImportROMConfirm => modal(
+                main_view,
+                import_rom_confirm_view(state),
+                Message::HideModal,
+            ),
+            Dialogue::ImportROMProgress => modal(
+                main_view,
+                import_rom_progress_view(state),
+                Message::HideModal,
+            ),
+            Dialogue::Help => modal(main_view, help_view(state), Message::HideModal),
+        }
+    } else {
+        main_view
+    }
+}
+
 pub fn view(state: &EditorState) -> Element<Message> {
     if state.global_config.project_dir.is_none() {
         return Space::new(Length::Fill, Length::Fill).into();
     }
-    let mut main_view: Element<Message> = row![
-        column![
-            row![
-                button(text("\u{F3E2}").font(iced_fonts::BOOTSTRAP_FONT))
-                    .style(button::secondary)
-                    .on_press(Message::SettingsDialogue),
-                area_controls(state),
-            ]
-            .spacing(10),
-            area_grid_view(state, AreaPosition::Main),
+
+    let main_panel: Element<Message> = column![
+        row![
+            button(text("\u{F3E2}").font(iced_fonts::BOOTSTRAP_FONT))
+                .style(button::secondary)
+                .on_press(Message::SettingsDialogue),
+            main_area_controls(state),
+            horizontal_space(),
+            button(text("\u{F505}").font(iced_fonts::BOOTSTRAP_FONT))
+                .style(button::secondary)
+                .on_press(Message::HelpDialogue),
         ]
-        .padding(10)
         .spacing(10),
-        vertical_separator(),
-        column![
+        area_grid_view(state, AreaPosition::Main),
+    ]
+    .padding(10)
+    .spacing(10)
+    .into();
+
+    let side_panel: Element<Message> = match state.side_panel_view {
+        SidePanelView::Tileset => column![
             used_palettes_view(state),
             selected_palette_view(state),
             graphics_view(state),
             tile_view(state),
         ]
         .width(420)
-    ]
-    .spacing(0)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into();
+        .into(),
+        SidePanelView::Area => column![
+            side_area_controls(state),
+            area_grid_view(state, AreaPosition::Side),
+        ]
+        .padding(10)
+        .spacing(10)
+        .width(420)
+        .into(),
+    };
 
-    if let Some(dialogue) = &state.dialogue {
-        match dialogue {
-            Dialogue::Settings => {
-                main_view = modal(main_view, settings_view(state), Message::HideModal);
-            }
-            Dialogue::AddPalette { name, id } => {
-                main_view = modal(main_view, add_palette_view(name, *id), Message::HideModal);
-            }
-            Dialogue::DeletePalette => {
-                main_view = modal(main_view, delete_palette_view(state), Message::HideModal);
-            }
-            Dialogue::RenamePalette { name } => {
-                main_view = modal(
-                    main_view,
-                    rename_palette_view(&state, name),
-                    Message::HideModal,
-                );
-            }
-            Dialogue::AddArea { name, size } => {
-                main_view = modal(main_view, add_area_view(name, *size), Message::HideModal);
-            }
-            Dialogue::EditArea { name } => {
-                main_view = modal(main_view, edit_area_view(state, name), Message::HideModal);
-            }
-            Dialogue::DeleteArea => {
-                main_view = modal(main_view, delete_area_view(state), Message::HideModal);
-            }
-            Dialogue::AddTheme { name } => {
-                main_view = modal(main_view, add_theme_view(name), Message::HideModal);
-            }
-            Dialogue::RenameTheme { name } => {
-                main_view = modal(
-                    main_view,
-                    rename_theme_view(state, name),
-                    Message::HideModal,
-                );
-            }
-            Dialogue::DeleteTheme => {
-                main_view = modal(main_view, delete_theme_view(state), Message::HideModal);
-            }
-            Dialogue::ImportROMConfirm => {
-                main_view = modal(
-                    main_view,
-                    import_rom_confirm_view(state),
-                    Message::HideModal,
-                );
-            }
-            Dialogue::ImportROMProgress => {
-                main_view = modal(
-                    main_view,
-                    import_rom_progress_view(state),
-                    Message::HideModal,
-                );
-            }
-        }
-    }
+    let mut main_view: Element<Message> = row![main_panel, vertical_separator(), side_panel,]
+        .spacing(0)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+
+    main_view = view_dialogue(state, main_view);
     main_view
 }
