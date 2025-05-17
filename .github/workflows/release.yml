@@ -2,6 +2,9 @@ on:
   release:
     types: [created]
 
+permissions:
+  content: write
+  
 jobs:
   release:
     name: release ${{ matrix.target }}
@@ -18,5 +21,6 @@ jobs:
         uses: ./rust-build.action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUST_TOOLCHAIN: 1.87.0
         with:
           RUSTTARGET: ${{ matrix.target }}
