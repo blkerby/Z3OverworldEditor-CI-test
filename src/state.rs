@@ -439,7 +439,6 @@ pub fn ensure_areas_non_empty(state: &mut EditorState) -> Result<()> {
         }
         area.modified = true;
         state.set_area(AreaPosition::Main, area)?;
-        save_area(state, &state.main_area_id.clone())?;
     }
     Ok(())
 }
