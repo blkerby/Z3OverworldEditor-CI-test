@@ -21,6 +21,7 @@ pub enum Message {
     WindowClose(iced::window::Id),
     SaveProject,
     OpenProject,
+    ModifiedReload,
     RebuildProjectDialogue,
     RebuildProject,
     ProjectOpened(Option<PathBuf>),

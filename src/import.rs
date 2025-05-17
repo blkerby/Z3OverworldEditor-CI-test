@@ -994,7 +994,7 @@ impl<'a> Importer<'a> {
             }
             self.state
                 .set_area(crate::state::AreaPosition::Main, area)?;
-            save_area_json(self.state, &self.state.main_area_id)?;
+            save_area_json(self.state, &self.state.main_area_id.clone())?;
         }
         Ok(())
     }

@@ -143,6 +143,29 @@ pub fn rebuild_project_view(_state: &EditorState) -> Element<Message> {
     .into()
 }
 
+pub fn modified_reload_view(_state: &EditorState) -> Element<Message> {
+    container(
+        column![
+            text("File changes detected on disk."),
+            text("Please click 'Accept' to load these changes, to keep the editor in sync with the project data."),
+            row![
+                button(text("Accept"))
+                    .style(button::success)
+                    .on_press(Message::ModifiedReload),
+                horizontal_space(),
+                button(text("Reject"))
+                    .style(button::danger)
+                    .on_press(Message::CloseDialogue),
+            ]
+        ]
+        .spacing(15),
+    )
+    .width(500)
+    .padding(25)
+    .style(modal_background_style)
+    .into()
+}
+
 pub fn view_dialogue<'a>(
     state: &'a EditorState,
     main_view: Element<'a, Message>,
@@ -188,6 +211,9 @@ pub fn view_dialogue<'a>(
             Dialogue::Help => modal(main_view, help_view(state), Message::HideModal),
             Dialogue::RebuildProject => {
                 modal(main_view, rebuild_project_view(state), Message::Nothing)
+            }
+            Dialogue::ModifiedReload => {
+                modal(main_view, modified_reload_view(state), Message::Nothing)
             }
         }
     } else {

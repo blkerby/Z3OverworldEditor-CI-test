@@ -24,6 +24,7 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
         Message::WindowClose(_) => UndoAction::None,
         Message::SaveProject => UndoAction::None,
         Message::OpenProject => UndoAction::None,
+        Message::ModifiedReload => UndoAction::None,
         Message::RebuildProjectDialogue => UndoAction::None,
         Message::RebuildProject => UndoAction::None,
         Message::ProjectOpened(_) => UndoAction::Irreversible,

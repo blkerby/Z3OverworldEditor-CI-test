@@ -4,6 +4,7 @@ use iced::{
 };
 use itertools::Itertools;
 use log::{error, info, warn};
+use notify::Watcher;
 
 use crate::{
     import::Importer,
@@ -444,10 +445,19 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             state.focus = focus;
         }
         Message::SaveProject => {
-            persist::save_project(state)?;
+            if *state.files_modified_notification.lock().unwrap() {
+                *state.files_modified_notification.lock().unwrap() = false;
+                state.dialogue = Some(Dialogue::ModifiedReload);
+            } else {
+                persist::save_project(state)?;
+            }
         }
         Message::OpenProject => {
             return Ok(Some(Task::perform(open_project(), Message::ProjectOpened)));
+        }
+        Message::ModifiedReload => {
+            persist::load_project(state)?;
+            state.dialogue = None;
         }
         Message::RebuildProjectDialogue => {
             state.dialogue = Some(Dialogue::RebuildProject);
@@ -1347,6 +1357,12 @@ pub fn update(state: &mut EditorState, mut message: Message) -> Task<Message> {
             // The update failed for an abnormal reason, so skip pushing
             // onto the undo stack, and log the error and backtrace:
             error!("Error processing {:?}: {}\n{}", message, e, e.backtrace());
+
+            // Make sure file watcher is re-enabled, since an error could easily
+            // have occurred between disabling and re-enabling:
+            if let Err(e) = state.enable_watch_file_changes() {
+                error!("Error re-enabling watcher: {}\n{}", e, e.backtrace());
+            }
             return Task::none();
         }
     }

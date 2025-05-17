@@ -1,8 +1,12 @@
 use anyhow::{bail, Context, Result};
 use hashbrown::{HashMap, HashSet};
 use log::info;
+use notify::Watcher;
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +53,7 @@ pub struct Palette {
     pub tiles: Vec<Tile>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct GlobalConfig {
     #[serde(skip_serializing, skip_deserializing)]
     pub modified: bool,
@@ -231,6 +235,7 @@ pub enum Dialogue {
     DeleteTheme,
     Help,
     RebuildProject,
+    ModifiedReload,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -317,6 +322,12 @@ pub struct EditorState {
     pub selected_tile_block: TileBlock,
     pub selected_gfx: Vec<Vec<Tile>>,
 
+    // Filesystem watch (to detect externa modifications)
+    pub watcher: Option<notify::RecommendedWatcher>,
+    pub watch_paths: Vec<PathBuf>,
+    pub watch_enabled: bool,
+    pub files_modified_notification: Arc<Mutex<bool>>,
+
     // Other editor state:
     pub dialogue: Option<Dialogue>,
 
@@ -401,6 +412,28 @@ impl EditorState {
         for key in delete_keys {
             save_area(self, &key)?;
             self.areas.remove(&key);
+        }
+        Ok(())
+    }
+
+    pub fn enable_watch_file_changes(&mut self) -> Result<()> {
+        if let Some(watcher) = &mut self.watcher {
+            if !self.watch_enabled {
+                for p in &self.watch_paths {
+                    watcher.watch(p, notify::RecursiveMode::Recursive)?;
+                }
+            }
+            self.watch_enabled = true;
+        }
+        Ok(())
+    }
+
+    pub fn disable_watch_file_changes(&mut self) -> Result<()> {
+        if let Some(watcher) = &mut self.watcher {
+            self.watch_enabled = false;
+            for p in &self.watch_paths {
+                watcher.unwatch(p)?;
+            }
         }
         Ok(())
     }
@@ -501,6 +534,10 @@ pub fn get_initial_state() -> Result<EditorState> {
         selected_tile_block: TileBlock::default(),
         selected_gfx: vec![],
         pixel_coords: None,
+        watcher: None,
+        watch_enabled: false,
+        watch_paths: vec![],
+        files_modified_notification: Arc::new(Mutex::new(false)),
         dialogue: None,
         palettes_id_idx_map: HashMap::new(),
     };

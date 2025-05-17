@@ -2,11 +2,13 @@ use std::{
     fs::{self, File},
     io::BufWriter,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result};
 use json_pretty_compact::PrettyCompactFormatter;
 use log::info;
+use notify::{recommended_watcher, Event, EventHandler, Watcher};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Serializer;
 
@@ -44,7 +46,9 @@ pub fn load_global_config(state: &mut EditorState) -> Result<()> {
 
 pub fn save_global_config(state: &mut EditorState) -> Result<()> {
     if state.global_config.modified {
+        state.disable_watch_file_changes()?;
         save_json(&state.global_config_path, &state.global_config)?;
+        state.enable_watch_file_changes()?;
         state.global_config.modified = false;
     }
     Ok(())
@@ -142,6 +146,7 @@ fn save_palette_tiles_png(png_path: &Path, palette: &Palette) -> Result<()> {
 
 fn save_palettes(state: &mut EditorState) -> Result<()> {
     let pal_dir = get_palette_dir(state)?;
+    state.disable_watch_file_changes()?;
     for pal in &mut state.palettes {
         if pal.modified {
             let pal_json_filename = format!("{}.json", pal.name);
@@ -159,6 +164,7 @@ fn save_palettes(state: &mut EditorState) -> Result<()> {
             pal.modified = false;
         }
     }
+    state.enable_watch_file_changes()?;
     Ok(())
 }
 
@@ -187,7 +193,9 @@ pub fn delete_palette(state: &mut EditorState, name: &str) -> Result<()> {
     let pal_dir = get_palette_dir(state)?;
     let path = pal_dir.join(format!("{}.json", name));
     info!("Deleting {}", path.display());
+    state.disable_watch_file_changes()?;
     std::fs::remove_file(path)?;
+    state.enable_watch_file_changes()?;
     Ok(())
 }
 
@@ -228,7 +236,7 @@ pub fn load_area(state: &EditorState, area_id: &AreaId) -> Result<Area> {
     Ok(area)
 }
 
-pub fn save_area_png(state: &EditorState, area_id: &AreaId) -> Result<()> {
+pub fn save_area_png(state: &mut EditorState, area_id: &AreaId) -> Result<()> {
     let mut color_bytes: Vec<Vec<[u8; 3]>> = vec![];
     let area = &state.areas[area_id];
     for i in 0..state.palettes.len() {
@@ -297,7 +305,7 @@ pub fn save_area_png(state: &EditorState, area_id: &AreaId) -> Result<()> {
     Ok(())
 }
 
-pub fn save_area_json(state: &EditorState, area_id: &AreaId) -> Result<()> {
+pub fn save_area_json(state: &mut EditorState, area_id: &AreaId) -> Result<()> {
     let area_dir = get_area_dir(state)?;
     let area_json_filename = format!("{}.json", area_id.theme);
     let area_json_path = area_dir.join(&area_id.area).join(area_json_filename);
@@ -307,8 +315,10 @@ pub fn save_area_json(state: &EditorState, area_id: &AreaId) -> Result<()> {
 
 pub fn save_area(state: &mut EditorState, area_id: &AreaId) -> Result<()> {
     if state.areas[area_id].modified {
+        state.disable_watch_file_changes()?;
         save_area_json(state, area_id)?;
         save_area_png(state, area_id)?;
+        state.enable_watch_file_changes()?;
         state.areas.get_mut(area_id).unwrap().modified = false;
     }
     Ok(())
@@ -328,7 +338,9 @@ pub fn copy_area_theme(
         old_area_path.display(),
         new_area_path.display()
     );
+    state.disable_watch_file_changes()?;
     std::fs::copy(old_area_path, new_area_path)?;
+    state.enable_watch_file_changes()?;
     Ok(())
 }
 
@@ -340,7 +352,9 @@ pub fn rename_area(state: &mut EditorState, old_name: &str, new_name: &str) -> R
         old_area_path.display(),
         new_area_path.display()
     );
+    state.disable_watch_file_changes()?;
     std::fs::rename(old_area_path, new_area_path)?;
+    state.enable_watch_file_changes()?;
     let keys: Vec<AreaId> = state
         .areas
         .keys()
@@ -354,7 +368,7 @@ pub fn rename_area(state: &mut EditorState, old_name: &str, new_name: &str) -> R
 }
 
 pub fn rename_area_theme(
-    state: &EditorState,
+    state: &mut EditorState,
     area_name: &str,
     old_theme: &str,
     new_theme: &str,
@@ -367,14 +381,18 @@ pub fn rename_area_theme(
         old_area_path.display(),
         new_area_path.display()
     );
+    state.disable_watch_file_changes()?;
     std::fs::rename(old_area_path, new_area_path)?;
+    state.enable_watch_file_changes()?;
     Ok(())
 }
 
 pub fn delete_area(state: &mut EditorState, name: &str) -> Result<()> {
     let area_path = get_area_dir(state)?.join(name);
     info!("Deleting {}", area_path.display());
+    state.disable_watch_file_changes()?;
     std::fs::remove_dir_all(area_path)?;
+    state.enable_watch_file_changes()?;
     let keys: Vec<AreaId> = state
         .areas
         .keys()
@@ -391,7 +409,9 @@ pub fn delete_area_theme(state: &mut EditorState, area_name: &str, theme: &str) 
     let area_dir = get_area_dir(state)?.join(area_name);
     let area_path = area_dir.join(format!("{}.json", theme));
     info!("Deleting {}", area_path.display());
+    state.disable_watch_file_changes()?;
     std::fs::remove_file(area_path)?;
+    state.enable_watch_file_changes()?;
     state.areas.remove(&AreaId {
         area: area_name.to_string(),
         theme: theme.to_string(),
@@ -431,10 +451,50 @@ pub fn save_project(state: &mut EditorState) -> Result<()> {
     }
     save_palettes(state)?;
     save_area(state, &state.main_area_id.clone())?;
+    save_area(state, &state.side_area_id.clone())?;
     Ok(())
 }
 
+struct FileModificationHandler {
+    modified: Arc<Mutex<bool>>,
+}
+
+impl FileModificationHandler {
+    fn new(modified: Arc<Mutex<bool>>) -> Self {
+        FileModificationHandler { modified }
+    }
+}
+
+impl EventHandler for FileModificationHandler {
+    fn handle_event(&mut self, event: notify::Result<notify::Event>) {
+        let Ok(e) = event else {
+            return;
+        };
+        match e.kind {
+            notify::EventKind::Modify(_) => {
+                let mut data = self.modified.lock().unwrap();
+                *data = true;
+            }
+            _ => {}
+        }
+    }
+}
+
 pub fn load_project(state: &mut EditorState) -> Result<()> {
+    // Set up watcher on the project directories:
+    let watch_locations = ["Areas", "Palettes"];
+    state.watch_paths.clear();
+    for loc in watch_locations {
+        state
+            .watch_paths
+            .push(state.global_config.project_dir.as_ref().unwrap().join(loc));
+    }
+    state.watcher = Some(recommended_watcher(FileModificationHandler::new(
+        state.files_modified_notification.clone(),
+    ))?);
+    state.watch_enabled = false;
+    state.enable_watch_file_changes()?;
+
     load_palettes(state)?;
     load_area_list(state)?;
     let area_id = AreaId {
@@ -446,5 +506,7 @@ pub fn load_project(state: &mut EditorState) -> Result<()> {
     state.palette_idx = 0;
     state.color_idx = None;
     state.tile_idx = None;
+    state.undo_stack.clear();
+    state.redo_stack.clear();
     Ok(())
 }
