@@ -297,6 +297,11 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                 let alpha = 0.75;
                 for ty in 0..self.tile_block.size.1 as usize {
                     for tx in 0..self.tile_block.size.0 as usize {
+                        if tx + base_x as usize >= self.area.size.0 as usize * 32
+                            || ty + base_y as usize >= self.area.size.1 as usize * 32
+                        {
+                            continue;
+                        }
                         let palette_id = self.tile_block.palettes[ty][tx];
                         if let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) {
                             let tile_idx = self.tile_block.tiles[ty][tx];
