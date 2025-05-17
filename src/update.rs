@@ -952,13 +952,24 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             if new_name != old_name {
                 rename_area(state, old_name, new_name)?;
                 load_area_list(state)?;
-                state.switch_area(
-                    AreaPosition::Main,
-                    &AreaId {
-                        area: new_name.clone(),
-                        theme: area_id.theme.clone(),
-                    },
-                )?;
+                if &state.main_area_id.area == old_name {
+                    state.switch_area(
+                        AreaPosition::Main,
+                        &AreaId {
+                            area: new_name.clone(),
+                            theme: area_id.theme.clone(),
+                        },
+                    )?;
+                }
+                if &state.side_area_id.area == old_name {
+                    state.switch_area(
+                        AreaPosition::Side,
+                        &AreaId {
+                            area: new_name.clone(),
+                            theme: area_id.theme.clone(),
+                        },
+                    )?;
+                }
             }
             state.dialogue = None;
         }
@@ -1001,13 +1012,24 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             let theme = state.main_area().theme.clone();
             delete_area(state, name)?;
             load_area_list(state)?;
-            state.switch_area(
-                AreaPosition::Main,
-                &AreaId {
-                    area: state.area_names[0].clone(),
-                    theme: theme,
-                },
-            )?;
+            if &state.main_area_id.area == name {
+                state.switch_area(
+                    AreaPosition::Main,
+                    &AreaId {
+                        area: state.area_names[0].clone(),
+                        theme: theme.clone(),
+                    },
+                )?;
+            }
+            if &state.side_area_id.area == name {
+                state.switch_area(
+                    AreaPosition::Side,
+                    &AreaId {
+                        area: state.area_names[0].clone(),
+                        theme: theme.clone(),
+                    },
+                )?;
+            }
             state.dialogue = None;
         }
         &Message::SelectTheme(position, ref theme) => {
@@ -1086,13 +1108,24 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 rename_area_theme(state, area_name, old_name, new_name)?;
             }
             load_area_list(state)?;
-            state.switch_area(
-                AreaPosition::Main,
-                &AreaId {
-                    area: state.main_area().name.clone(),
-                    theme: new_name.clone(),
-                },
-            )?;
+            if &state.main_area_id.theme == old_name {
+                state.switch_area(
+                    AreaPosition::Main,
+                    &AreaId {
+                        area: state.main_area().name.clone(),
+                        theme: new_name.clone(),
+                    },
+                )?;
+            }
+            if &state.side_area_id.theme == old_name {
+                state.switch_area(
+                    AreaPosition::Side,
+                    &AreaId {
+                        area: state.main_area().name.clone(),
+                        theme: new_name.clone(),
+                    },
+                )?;
+            }
             state.dialogue = None;
         }
         Message::DeleteThemeDialogue => {
@@ -1108,13 +1141,24 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 delete_area_theme(state, area_name, theme_name)?;
             }
             load_area_list(state)?;
-            state.switch_area(
-                AreaPosition::Main,
-                &AreaId {
-                    area,
-                    theme: state.theme_names[0].clone(),
-                },
-            )?;
+            if &state.main_area_id.theme == theme_name {
+                state.switch_area(
+                    AreaPosition::Main,
+                    &AreaId {
+                        area: area.clone(),
+                        theme: state.theme_names[0].clone(),
+                    },
+                )?;
+            }
+            if &state.side_area_id.theme == theme_name {
+                state.switch_area(
+                    AreaPosition::Side,
+                    &AreaId {
+                        area: area.clone(),
+                        theme: state.theme_names[0].clone(),
+                    },
+                )?;
+            }
             state.dialogue = None;
         }
         &Message::StartTileSelection(p, source) => {
