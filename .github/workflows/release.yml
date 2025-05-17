@@ -1,4 +1,4 @@
-name: Check Rust
+name: Build release
 
 on:
   push:
@@ -17,4 +17,5 @@ jobs:
           submodules: 'true'
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo fmt --check
+      - run: rustup target add x86_64-pc-windows-gnu
       - run: cargo build --release --target x86_64-pc-windows-gnu
