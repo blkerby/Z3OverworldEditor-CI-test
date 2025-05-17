@@ -22,5 +22,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUST_TOOLCHAIN: 1.87.0
+          STATIC_LINKING: true
         with:
           RUSTTARGET: ${{ matrix.target }}
