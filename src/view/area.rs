@@ -11,6 +11,7 @@ use iced::{
     Element, Length, Padding, Point, Rectangle, Size,
 };
 use iced_aw::number_input;
+use log::info;
 
 use crate::{
     helpers::{alpha_blend, scale_color},
@@ -95,9 +96,9 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
         }
         match event {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
-                mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                mouse::Event::ButtonPressed(btn @ (mouse::Button::Left | mouse::Button::Right)) => {
                     if let Some(p) = cursor.position_over(bounds) {
-                        if self.brush_mode {
+                        if self.brush_mode && btn == mouse::Button::Left {
                             state.action = InternalStateAction::Brushing;
                             let coords =
                                 clamped_position_in(p, bounds, self.area.size, self.pixel_size);
@@ -122,10 +123,10 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         }
                     };
                 }
-                mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                mouse::Event::ButtonReleased(mouse::Button::Left | mouse::Button::Right) => {
                     let state0 = *state;
                     state.action = InternalStateAction::None;
-                    if !self.brush_mode && state0.action == InternalStateAction::Selecting {
+                    if state0.action == InternalStateAction::Selecting {
                         let coords = if let Some(p) = cursor.position() {
                             clamped_position_in(p, bounds, self.area.size, self.pixel_size)
                         } else if let Some(c) = self.end_coords {
@@ -139,8 +140,9 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         );
                     }
                 }
-                mouse::Event::CursorMoved { .. } => {
-                    if !self.brush_mode && state.action == InternalStateAction::Selecting {
+                mouse::Event::CursorMoved { .. } => match state.action {
+                    InternalStateAction::None => {}
+                    InternalStateAction::Selecting => {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
@@ -152,7 +154,8 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                                 ))),
                             );
                         }
-                    } else if self.brush_mode && state.action == InternalStateAction::Brushing {
+                    }
+                    InternalStateAction::Brushing => {
                         if let Some(p) = cursor.position() {
                             let coords =
                                 clamped_position_in(p, bounds, self.area.size, self.pixel_size);
@@ -167,26 +170,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                             );
                         }
                     }
-                }
-                mouse::Event::ButtonPressed(mouse::Button::Right) => {
-                    state.action = InternalStateAction::None;
-                    if let Some(p) = cursor.position_over(bounds) {
-                        let coords =
-                            clamped_position_in(p, bounds, self.area.size, self.pixel_size);
-                        let palette_id = self.area.get_palette(coords.x, coords.y).unwrap();
-                        let tile_idx = self.area.get_tile(coords.x, coords.y).unwrap();
-                        return (
-                            canvas::event::Status::Captured,
-                            Some(Message::OpenTile {
-                                palette_id,
-                                tile_idx,
-                            }),
-                        );
-                    } else {
-                        return (canvas::event::Status::Ignored, None);
-                    };
-                }
-                // mouse::Event::CursorLeft => {}
+                },
                 _ => {}
             },
             _ => {}
@@ -285,7 +269,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
             }
         }
 
-        if self.brush_mode {
+        if self.brush_mode && self.end_coords.is_none() {
             // Overlay the block to be pasted/brushed onto the area:
             if let Some(Point {
                 x: base_x,
@@ -487,8 +471,7 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
             canvas(AreaSelect {
                 active: state.selection_source == SelectionSource::Area(position)
                     && state.start_coords.is_some()
-                    && state.end_coords.is_some()
-                    && !state.brush_mode,
+                    && state.end_coords.is_some(),
                 left,
                 right,
                 top,

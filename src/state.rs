@@ -307,7 +307,6 @@ pub struct EditorState {
 
     // Tile editing state:
     pub tile_idx: Option<TileIdx>,
-    pub selected_tile: Tile,
     pub identify_tile: bool,
 
     // Graphics editing state:
@@ -526,7 +525,6 @@ pub fn get_initial_state() -> Result<EditorState> {
         selected_color: [0, 0, 0],
         identify_color: false,
         tile_idx: None,
-        selected_tile: Tile::default(),
         identify_tile: false,
         selection_source: SelectionSource::Area(AreaPosition::Main),
         start_coords: None,

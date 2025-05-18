@@ -259,7 +259,7 @@ pub fn graphics_view(state: &EditorState) -> Element<Message> {
             })
             .width(24 * 8 + 2)
             .height(24 * 8 + 4)
-        ]);
+        ]).padding([10, 0]);
     }
     col.into()
 }

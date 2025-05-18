@@ -14,8 +14,8 @@ use graphics::graphics_view;
 use iced::{
     alignment::Vertical,
     widget::{
-        button, center, column, container, horizontal_space, mouse_area, opaque, row, stack, text,
-        Column, Space,
+        button, center, column, container, horizontal_space, mouse_area, opaque, responsive, row,
+        stack, text, Column, Space,
     },
     Element, Font, Length, Theme,
 };
@@ -248,8 +248,9 @@ pub fn view(state: &EditorState) -> Element<Message> {
         SidePanelView::Tileset => column![
             used_palettes_view(state),
             selected_palette_view(state),
-            graphics_view(state),
-            tile_view(state),
+            responsive(
+                move |size| column![tile_view(state, size, 260.0), graphics_view(state)].into()
+            )
         ]
         .width(420)
         .into(),

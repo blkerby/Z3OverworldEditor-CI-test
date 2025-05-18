@@ -133,7 +133,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 Focus::None => {}
                 Focus::PickArea(_) => {}
                 Focus::PickTheme(_) => {}
-                Focus::Area(_) => {}
+                Focus::Area(_) => {
+                    state.identify_tile = modifiers.control();
+                }
                 Focus::PickPalette => {}
                 Focus::PaletteColor | Focus::GraphicsPixel => {
                     state.identify_color = modifiers.control();
@@ -1195,11 +1197,6 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                     state.focus = Focus::Area(position);
                 }
                 SelectionSource::Tileset => {
-                    if left == right && top == bottom {
-                        let idx = p1.1 * 16 + p1.0;
-                        state.tile_idx = Some(idx);
-                        state.selected_tile = state.palettes[state.palette_idx].tiles[idx as usize];
-                    }
                     state.focus = Focus::TilesetTile;
                 }
             }
@@ -1252,6 +1249,17 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 }
                 state.selected_gfx.push(gfx_row);
             }
+
+            state.start_coords = None;
+            state.end_coords = None;
+            if left == right && top == bottom {
+                return Ok(Some(Task::done(Message::OpenTile {
+                    palette_id: s.palettes[0][0],
+                    tile_idx: s.tiles[0][0],
+                })));
+            } else {
+                state.tile_idx = None;
+            }
         }
         &Message::AreaBrush {
             position,
@@ -1278,7 +1286,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
         } => {
             if let Some(&palette_idx) = state.palettes_id_idx_map.get(&palette_id) {
                 state.palette_idx = palette_idx;
-                select_tileset_tile(state, tile_idx)?;
+                state.tile_idx = Some(tile_idx);
             }
         }
     }

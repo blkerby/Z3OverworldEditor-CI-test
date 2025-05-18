@@ -8,6 +8,7 @@ use iced::{
     },
     Element, Length, Point, Rectangle, Size,
 };
+use log::info;
 
 use crate::{
     helpers::{alpha_blend, scale_color},
@@ -78,9 +79,9 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
         }
         match event {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
-                mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                mouse::Event::ButtonPressed(btn @ (mouse::Button::Left | mouse::Button::Right)) => {
                     if let Some(p) = cursor.position_over(bounds) {
-                        if self.brush_mode {
+                        if self.brush_mode && btn == mouse::Button::Left {
                             state.action = InternalStateAction::Brushing;
                             let coords = clamped_position_in(
                                 p,
@@ -113,10 +114,10 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                         }
                     };
                 }
-                mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                mouse::Event::ButtonReleased(mouse::Button::Left | mouse::Button::Right) => {
                     let state0 = *state;
                     state.action = InternalStateAction::None;
-                    if !self.brush_mode && state0.action == InternalStateAction::Selecting {
+                    if state0.action == InternalStateAction::Selecting {
                         let coords = if let Some(p) = cursor.position() {
                             clamped_position_in(
                                 p,
@@ -135,8 +136,9 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                         );
                     }
                 }
-                mouse::Event::CursorMoved { .. } => {
-                    if !self.brush_mode && state.action == InternalStateAction::Selecting {
+                mouse::Event::CursorMoved { .. } => match state.action {
+                    InternalStateAction::None => {}
+                    InternalStateAction::Selecting => {
                         if let Some(p) = cursor.position() {
                             return (
                                 canvas::event::Status::Captured,
@@ -148,7 +150,8 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                                 ))),
                             );
                         }
-                    } else if self.brush_mode && state.action == InternalStateAction::Brushing {
+                    }
+                    InternalStateAction::Brushing => {
                         if let Some(p) = cursor.position() {
                             let coords = clamped_position_in(
                                 p,
@@ -166,7 +169,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
                             );
                         }
                     }
-                }
+                },
                 _ => {}
             },
             _ => {}
@@ -264,6 +267,7 @@ struct TileSelect {
     left: TileCoord,
     right: TileCoord,
     active: bool,
+    selecting: bool,
     pixel_size: f32,
     thickness: f32,
 }
@@ -298,50 +302,50 @@ impl canvas::Program<Message> for TileSelect {
                 height: y1 - y0,
             },
         );
-        for i in 0..2 {
+        if self.selecting {
+            for i in 0..2 {
+                frame.stroke(
+                    &path,
+                    canvas::Stroke {
+                        style: if i == 0 {
+                            canvas::stroke::Style::Solid(iced::Color::WHITE)
+                        } else {
+                            canvas::stroke::Style::Solid(iced::Color::BLACK)
+                        },
+                        width: self.thickness,
+                        line_dash: canvas::LineDash {
+                            offset: i,
+                            segments: &[0.0, 0.0, 4.0, 4.0],
+                        },
+                        ..Default::default()
+                    },
+                );
+            }
+        } else {
             frame.stroke(
                 &path,
                 canvas::Stroke {
-                    style: if i == 0 {
-                        canvas::stroke::Style::Solid(iced::Color::WHITE)
-                    } else {
-                        canvas::stroke::Style::Solid(iced::Color::BLACK)
-                    },
+                    style: canvas::stroke::Style::Solid(iced::Color::from_rgb8(0, 255, 0)),
                     width: self.thickness,
-                    line_dash: canvas::LineDash {
-                        offset: i,
-                        segments: &[0.0, 0.0, 4.0, 4.0],
-                    },
                     ..Default::default()
                 },
             );
         }
         vec![frame.into_geometry()]
     }
-
-    // fn mouse_interaction(
-    //     &self,
-    //     _interaction: &Self::State,
-    //     bounds: iced::Rectangle,
-    //     cursor: mouse::Cursor,
-    // ) -> mouse::Interaction {
-    //     // if self.brush_mode && cursor.is_over(bounds) && self.exists_selection {
-    //     //     mouse::Interaction::Crosshair
-    //     // } else {
-    //     //     mouse::Interaction::default()
-    //     // }
-    // }
 }
 
-pub fn tile_view(state: &EditorState) -> Element<Message> {
+pub fn tile_view(state: &EditorState, size: Size, reserved_height: f32) -> Element<Message> {
     let num_cols = 16;
     let num_rows = (state.palettes[state.palette_idx].tiles.len() + num_cols - 1) / num_cols;
     let pixel_size = 3;
+    let height = num_rows * pixel_size * 8 + 10;
 
     let mut left = 0;
     let mut right = 0;
     let mut top = 0;
     let mut bottom = 0;
+    let mut selecting = false;
 
     match (state.start_coords, state.end_coords) {
         (Some(p0), Some(p1)) => {
@@ -349,8 +353,16 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
             right = p0.0.max(p1.0);
             top = p0.1.min(p1.1);
             bottom = p0.1.max(p1.1);
+            selecting = true;
         }
-        _ => {}
+        _ => {
+            if let Some(idx) = state.tile_idx {
+                left = idx % num_cols as TileCoord;
+                right = left;
+                top = idx / num_cols as TileCoord;
+                bottom = top;
+            }
+        }
     }
 
     let col = column![
@@ -380,14 +392,15 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
                 .width(384 + 4)
                 .height((num_rows * 8 * pixel_size + 4) as f32),
                 canvas(TileSelect {
-                    active: state.selection_source == SelectionSource::Tileset
-                        && state.start_coords.is_some()
-                        && state.end_coords.is_some()
-                        && !state.brush_mode,
+                    active: state.tile_idx.is_some()
+                        || (state.selection_source == SelectionSource::Tileset
+                            && state.start_coords.is_some()
+                            && state.end_coords.is_some()),
                     left,
                     right,
                     top,
                     bottom,
+                    selecting,
                     pixel_size: pixel_size as f32,
                     thickness: 1.0,
                 })
@@ -397,7 +410,11 @@ pub fn tile_view(state: &EditorState) -> Element<Message> {
             Direction::Vertical(Scrollbar::default())
         )
         .width(420)
-        .height(Length::Fill),
+        .height(if height as f32 + reserved_height > size.height {
+            Length::Fill
+        } else {
+            Length::Fixed(height as f32)
+        }),
     ]
     .spacing(5);
     row![col].padding(10).into()
