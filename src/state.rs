@@ -348,10 +348,6 @@ impl EditorState {
         &self.areas[&self.side_area_id]
     }
 
-    pub fn side_area_mut(&mut self) -> &mut Area {
-        self.areas.get_mut(&self.side_area_id.clone()).unwrap()
-    }
-
     pub fn area_id(&self, position: AreaPosition) -> &AreaId {
         match position {
             AreaPosition::Main => &self.main_area_id,
@@ -420,7 +416,9 @@ impl EditorState {
         if let Some(watcher) = &mut self.watcher {
             if !self.watch_enabled {
                 for p in &self.watch_paths {
-                    watcher.watch(p, notify::RecursiveMode::Recursive)?;
+                    if let Err(e) = watcher.watch(p, notify::RecursiveMode::Recursive) {
+                        info!("Unable to watch path {}: {}", p.display(), e);
+                    }
                 }
             }
             self.watch_enabled = true;
@@ -432,7 +430,9 @@ impl EditorState {
         if let Some(watcher) = &mut self.watcher {
             self.watch_enabled = false;
             for p in &self.watch_paths {
-                watcher.unwatch(p)?;
+                if let Err(e) = watcher.unwatch(p) {
+                    info!("Unable to unwatch path {}: {}", p.display(), e);
+                }
             }
         }
         Ok(())
@@ -541,13 +541,12 @@ pub fn get_initial_state() -> Result<EditorState> {
         dialogue: None,
         palettes_id_idx_map: HashMap::new(),
     };
-    match persist::load_global_config(&mut state) {
-        Ok(_) => {
-            persist::load_project(&mut state)?;
-        }
-        Err(err) => {
-            info!("Unable to load global config, using default: {}", err);
-        }
+    if let Err(err) = persist::load_global_config(&mut state) {
+        info!("Unable to load global config, using default: {}", err);
+    }
+    if let Err(err) = persist::load_project(&mut state) {
+        info!("Unable to load project: {}", err);
+        state.global_config.project_dir = None;
     }
     ensure_themes_non_empty(&mut state);
     ensure_areas_non_empty(&mut state)?;

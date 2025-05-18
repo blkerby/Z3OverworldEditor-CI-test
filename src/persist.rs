@@ -5,10 +5,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use json_pretty_compact::PrettyCompactFormatter;
 use log::info;
-use notify::{recommended_watcher, Event, EventHandler, Watcher};
+use notify::{recommended_watcher, EventHandler};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Serializer;
 
@@ -481,6 +481,13 @@ impl EventHandler for FileModificationHandler {
 }
 
 pub fn load_project(state: &mut EditorState) -> Result<()> {
+    if !state.global_config.project_dir.as_ref().unwrap().exists() {
+        bail!(
+            "Project directory does not exist: {}",
+            state.global_config.project_dir.as_ref().unwrap().display()
+        );
+    }
+
     // Set up watcher on the project directories:
     let watch_locations = ["Areas", "Palettes"];
     state.watch_paths.clear();

@@ -4,14 +4,13 @@ use iced::{
 };
 use itertools::Itertools;
 use log::{error, info, warn};
-use notify::Watcher;
 
 use crate::{
     import::Importer,
     message::{Message, SelectionSource},
     persist::{
-        self, copy_area_theme, delete_area, delete_area_theme, delete_palette, load_area,
-        load_area_list, rename_area, rename_area_theme, save_area, save_area_png,
+        self, copy_area_theme, delete_area, delete_area_theme, delete_palette, load_area_list,
+        rename_area, rename_area_theme, save_area, save_area_png,
     },
     state::{
         Area, AreaId, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen,
@@ -518,6 +517,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
         }
         &Message::SetPixelSize(pixel_size) => {
             state.global_config.pixel_size = pixel_size;
+            state.global_config.modified = true;
         }
         Message::CloseDialogue => {
             state.dialogue = None;

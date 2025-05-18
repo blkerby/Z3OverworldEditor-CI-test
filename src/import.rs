@@ -12,7 +12,7 @@ use crate::{
     persist::{load_area, load_project, save_area_json, save_area_png, save_project},
     state::{
         Area, AreaId, AreaName, ColorRGB, ColorValue, EditorState, Flip, Palette, PaletteId,
-        PaletteIdx, Screen, Tile, TileIdx,
+        Screen, Tile, TileIdx,
     },
     update::update_palette_order,
 };
