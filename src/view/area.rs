@@ -11,7 +11,6 @@ use iced::{
     Element, Length, Padding, Point, Rectangle, Size,
 };
 use iced_aw::number_input;
-use log::info;
 
 use crate::{
     helpers::{alpha_blend, scale_color},

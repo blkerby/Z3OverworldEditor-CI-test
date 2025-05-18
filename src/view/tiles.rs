@@ -8,7 +8,6 @@ use iced::{
     },
     Element, Length, Point, Rectangle, Size,
 };
-use log::info;
 
 use crate::{
     helpers::{alpha_blend, scale_color},

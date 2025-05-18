@@ -1,0 +1,20 @@
+Notes for ROM export:
+
+- load palettes
+  - BG palettes stored in two places: 
+     - $7EC500-$7EC600
+     - $7EC300-$7EC400
+     - $0AA8: determines which one is used (but is it ever not zero?)
+- load graphics
+- load map16
+  - TILEMAPA/TILEMAPB: $7E2000-$7E6000: map16 tiles for current area
+- handle tile interactions:
+  - TILEATTR = $7EFE00: tile interaction types
+- handle dynamic map16 changes: lift/smash rock, hammer peg, bomb wall, dash bonk, cut grass
+  - #_1BBF9D Overworld_HandleLiftableTiles:  checks for specifc map16 tile indices
+  - #_1BC09F #SmashRockPile_fromLift: ...
+  - M16CHTILES = $7EFA00: used to restore tiles after failed mirror
+
+
+; MASSIVE FREE RAM: 0x68A8 at $7F74D8
+
