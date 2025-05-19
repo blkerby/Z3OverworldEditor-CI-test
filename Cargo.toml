@@ -1,5 +1,5 @@
 [package]
-name = "Z3OverworldEditor"
+name = "z3_overworld_editor"
 version = "0.1.0"
 edition = "2021"
 
@@ -22,3 +22,4 @@ hashbrown = "0.15.3"
 itertools = "0.14.0"
 png = "0.17.16"
 notify = "8.0.0"
+clap = { version = "4.5.38", features = ["derive"] }

@@ -1,18 +1,11 @@
 use std::time::Duration;
 
+use z3_overworld_editor::{message, state, update, view};
+
 use anyhow::Result;
 use iced::{Size, Subscription, Task, Theme};
 use message::Message;
 use state::EditorState;
-
-mod helpers;
-mod import;
-mod message;
-mod persist;
-mod state;
-mod undo;
-mod update;
-mod view;
 
 fn theme(_state: &EditorState) -> Theme {
     match dark_light::detect().unwrap_or(dark_light::Mode::Unspecified) {
@@ -31,7 +24,7 @@ fn subscription(_state: &EditorState) -> Subscription<Message> {
 
 pub fn main() -> Result<()> {
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("Z3OverworldEditor=info"),
+        env_logger::Env::default().default_filter_or("z3_overworld_editor=info"),
     )
     .format_timestamp_millis()
     .init();

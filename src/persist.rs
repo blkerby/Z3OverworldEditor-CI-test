@@ -449,6 +449,7 @@ pub fn save_project(state: &mut EditorState) -> Result<()> {
     if state.global_config.project_dir.is_none() {
         return Ok(());
     }
+    save_global_config(state)?;
     save_palettes(state)?;
     save_area(state, &state.main_area_id.clone())?;
     save_area(state, &state.side_area_id.clone())?;
