@@ -140,6 +140,7 @@ pub enum Message {
         area_id: AreaId,
         coords: Point<TileCoord>,
         selection: TileBlock,
+        palette_only: bool,
     },
     OpenTile {
         palette_id: PaletteId,

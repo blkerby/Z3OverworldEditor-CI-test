@@ -91,17 +91,20 @@ fn should_debounce(message: &Message, last_message: &Message) -> bool {
             area_id,
             coords,
             selection,
+            palette_only,
         } => match last_message {
             Message::AreaBrush {
                 position: last_position,
                 area_id: last_area_id,
                 coords: last_coords,
                 selection: last_selection,
+                palette_only: last_palette_only,
             } => {
                 position == last_position
                     && area_id == last_area_id
                     && coords == last_coords
                     && selection == last_selection
+                    && palette_only == last_palette_only
             }
             _ => false,
         },
@@ -129,21 +132,24 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                     return Ok(Some(widget::focus_next()));
                 }
             }
-            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.focus {
-                Focus::None => {}
-                Focus::PickArea(_) => {}
-                Focus::PickTheme(_) => {}
-                Focus::Area(_) => {
-                    state.identify_tile = modifiers.control();
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+                state.palette_only_brush = modifiers.shift();
+                match state.focus {
+                    Focus::None => {}
+                    Focus::PickArea(_) => {}
+                    Focus::PickTheme(_) => {}
+                    Focus::Area(_) => {
+                        state.identify_tile = modifiers.control();
+                    }
+                    Focus::PickPalette => {}
+                    Focus::PaletteColor | Focus::GraphicsPixel => {
+                        state.identify_color = modifiers.control();
+                    }
+                    Focus::TilesetTile => {
+                        state.identify_tile = modifiers.control();
+                    }
                 }
-                Focus::PickPalette => {}
-                Focus::PaletteColor | Focus::GraphicsPixel => {
-                    state.identify_color = modifiers.control();
-                }
-                Focus::TilesetTile => {
-                    state.identify_tile = modifiers.control();
-                }
-            },
+            }
             Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(key::Named::Escape),
                 ..
@@ -1273,6 +1279,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             ref area_id,
             coords,
             ref selection,
+            palette_only,
         } => {
             state.switch_area(position, area_id)?;
             let s = selection;
@@ -1281,8 +1288,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
             for y in 0..s.size.1 {
                 for x in 0..s.size.0 {
                     let _ = area.set_palette(p.x + x, p.y + y, s.palettes[y as usize][x as usize]);
-                    let _ = area.set_tile(p.x + x, p.y + y, s.tiles[y as usize][x as usize]);
-                    let _ = area.set_flip(p.x + x, p.y + y, s.flips[y as usize][x as usize]);
+                    if !palette_only {
+                        let _ = area.set_tile(p.x + x, p.y + y, s.tiles[y as usize][x as usize]);
+                        let _ = area.set_flip(p.x + x, p.y + y, s.flips[y as usize][x as usize]);
+                    }
                 }
             }
             area.modified = true;

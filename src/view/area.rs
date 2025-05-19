@@ -37,6 +37,7 @@ struct AreaGrid<'a> {
     pixel_size: f32,
     // thickness: f32,
     brush_mode: bool,
+    palette_only_brush: bool,
     tile_block: &'a TileBlock,
     identify_tile: bool,
     palette_idx: usize,
@@ -108,6 +109,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                                     area_id: self.area_id.clone(),
                                     coords,
                                     selection: self.tile_block.clone(),
+                                    palette_only: self.palette_only_brush,
                                 }),
                             );
                         } else {
@@ -165,6 +167,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                                     area_id: self.area_id.clone(),
                                     coords,
                                     selection: self.tile_block.clone(),
+                                    palette_only: self.palette_only_brush,
                                 }),
                             );
                         }
@@ -287,10 +290,27 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
                         }
                         let palette_id = self.tile_block.palettes[ty][tx];
                         if let Some(&palette_idx) = self.palettes_id_idx_map.get(&palette_id) {
-                            let tile_idx = self.tile_block.tiles[ty][tx];
-                            let flip = self.tile_block.flips[ty][tx];
-                            let tile = self.palettes[palette_idx].tiles[tile_idx as usize];
-                            let tile = flip.apply_to_tile(tile);
+                            let tile = if self.palette_only_brush {
+                                let x1 = base_x + tx as TileCoord;
+                                let y1 = base_y + ty as TileCoord;
+                                let tile_idx = self.area.get_tile(x1, y1).unwrap();
+                                let flip = self.area.get_flip(x1, y1).unwrap();
+                                let clamped_tile_idx = std::cmp::min(
+                                    tile_idx,
+                                    self.palettes[palette_idx].tiles.len() as TileIdx - 1,
+                                );
+                                // TODO: indicate out-of-bounds tile index with some consistent broken tile indicator
+                                let t = *self.palettes[palette_idx]
+                                    .tiles
+                                    .get(clamped_tile_idx as usize)
+                                    .unwrap();
+                                flip.apply_to_tile(t)
+                            } else {
+                                let tile_idx = self.tile_block.tiles[ty][tx];
+                                let flip = self.tile_block.flips[ty][tx];
+                                let t = self.palettes[palette_idx].tiles[tile_idx as usize];
+                                flip.apply_to_tile(t)
+                            };
                             let cb = &color_bytes[palette_idx];
                             let mut tile_addr =
                                 base_addr + ty * 8 * row_stride + tx * 8 * col_stride;
@@ -494,6 +514,7 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
                 end_coords: state.end_coords,
                 // thickness: 1.0,
                 brush_mode: state.brush_mode,
+                palette_only_brush: state.palette_only_brush,
                 tile_block: &state.selected_tile_block,
                 identify_tile: state.identify_tile,
                 palette_idx: state.palette_idx,

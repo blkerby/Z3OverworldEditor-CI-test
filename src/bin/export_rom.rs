@@ -16,7 +16,6 @@ use z3_overworld_editor::{
 
 #[derive(Parser, Debug)]
 struct Args {
-    /// Name of the person to greet
     #[arg(long)]
     theme: String,
 }

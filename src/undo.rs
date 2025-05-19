@@ -250,6 +250,7 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
             area_id,
             coords,
             selection,
+            palette_only,
         } => {
             let mut palettes: Vec<Vec<PaletteId>> = vec![];
             let mut tiles: Vec<Vec<TileIdx>> = vec![];
@@ -284,6 +285,7 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
                 area_id: area_id.clone(),
                 coords: *coords,
                 selection: new_selection,
+                palette_only: *palette_only,
             })
         }
         Message::OpenTile { .. } => UndoAction::None,
