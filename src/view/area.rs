@@ -354,9 +354,11 @@ struct AreaSelect {
     bottom: TileCoord,
     left: TileCoord,
     right: TileCoord,
-    active: bool,
+    selecting_active: bool,
     pixel_size: f32,
     brush_mode: bool,
+    show_grid: bool,
+    grid_alpha: f32,
 }
 
 impl canvas::Program<Message> for AreaSelect {
@@ -371,42 +373,76 @@ impl canvas::Program<Message> for AreaSelect {
         bounds: iced::Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        if !self.active {
+        if !self.selecting_active && !self.show_grid {
             return vec![];
         }
+
         let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let pixel_size_x =
+            self.pixel_size * bounds.size().width / (bounds.size().width - self.pixel_size);
+        let pixel_size_y =
+            self.pixel_size * bounds.size().height / (bounds.size().height - self.pixel_size);
+        if self.show_grid {
+            let rows16 = (bounds.size().height / (pixel_size_y * 16.0)) as u16;
+            let cols16 = (bounds.size().width / (pixel_size_x * 16.0)) as u16;
 
-        let pixel_size = self.pixel_size;
-
-        let x0 = self.left as f32 * pixel_size * 8.0 + pixel_size / 2.0;
-        let x1 = (self.right + 1) as f32 * pixel_size * 8.0 + pixel_size / 2.0 + 2.0;
-        let y0 = self.top as f32 * pixel_size * 8.0 + pixel_size / 2.0;
-        let y1 = (self.bottom + 1) as f32 * pixel_size * 8.0 + pixel_size / 2.0 + 2.0;
-        let path = canvas::Path::rectangle(
-            iced::Point { x: x0, y: y0 },
-            Size {
-                width: x1 - x0,
-                height: y1 - y0,
-            },
-        );
-        for i in 0..2 {
+            let path = canvas::Path::new(|p| {
+                for i in 0..=rows16 {
+                    let x = i as f32 * pixel_size_x * 16.0 + pixel_size_x / 2.0;
+                    p.move_to(Point::new(x, self.pixel_size / 2.0));
+                    p.line_to(Point::new(x, bounds.height - self.pixel_size / 2.0));
+                }
+                for i in 0..=cols16 {
+                    let y = i as f32 * pixel_size_y * 16.0 + pixel_size_y / 2.0;
+                    p.move_to(Point::new(self.pixel_size / 2.0, y));
+                    p.line_to(Point::new(bounds.width - self.pixel_size / 2.0, y));
+                }
+            });
             frame.stroke(
                 &path,
                 canvas::Stroke {
-                    style: if i == 0 {
-                        canvas::stroke::Style::Solid(iced::Color::WHITE)
-                    } else {
-                        canvas::stroke::Style::Solid(iced::Color::BLACK)
-                    },
+                    style: canvas::stroke::Style::Solid(iced::Color::from_rgba(
+                        1.0,
+                        1.0,
+                        1.0,
+                        self.grid_alpha,
+                    )),
                     width: 1.0,
-                    line_dash: canvas::LineDash {
-                        offset: i,
-                        segments: &[0.0, 0.0, 4.0, 4.0],
-                    },
-                    line_join: canvas::LineJoin::Miter,
                     ..Default::default()
                 },
             );
+        }
+        if self.selecting_active {
+            let x0 = self.left as f32 * pixel_size_x * 8.0 + pixel_size_x / 2.0;
+            let x1 = (self.right + 1) as f32 * pixel_size_x * 8.0 + pixel_size_x / 2.0;
+            let y0 = self.top as f32 * pixel_size_y * 8.0 + pixel_size_y / 2.0;
+            let y1 = (self.bottom + 1) as f32 * pixel_size_y * 8.0 + pixel_size_y / 2.0;
+            let path = canvas::Path::rectangle(
+                iced::Point { x: x0, y: y0 },
+                Size {
+                    width: x1 - x0,
+                    height: y1 - y0,
+                },
+            );
+            for i in 0..2 {
+                frame.stroke(
+                    &path,
+                    canvas::Stroke {
+                        style: if i == 0 {
+                            canvas::stroke::Style::Solid(iced::Color::WHITE)
+                        } else {
+                            canvas::stroke::Style::Solid(iced::Color::BLACK)
+                        },
+                        width: 1.0,
+                        line_dash: canvas::LineDash {
+                            offset: i,
+                            segments: &[0.0, 0.0, 4.0, 4.0],
+                        },
+                        line_join: canvas::LineJoin::Miter,
+                        ..Default::default()
+                    },
+                );
+            }
         }
         vec![frame.into_geometry()]
     }
@@ -468,7 +504,7 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
             .width((num_cols as f32 * 8.0 + 2.0) * pixel_size)
             .height((num_rows as f32 * 8.0 + 2.0) * pixel_size),
             canvas(AreaSelect {
-                active: state.selection_source == SelectionSource::Area(position)
+                selecting_active: state.selection_source == SelectionSource::Area(position)
                     && state.start_coords.is_some()
                     && state.end_coords.is_some(),
                 left,
@@ -477,6 +513,8 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
                 bottom,
                 pixel_size,
                 brush_mode: state.brush_mode,
+                show_grid: state.show_grid,
+                grid_alpha: state.global_config.grid_alpha,
             })
             .width((num_cols as f32 * 8.0 + 2.0) * pixel_size)
             .height((num_rows as f32 * 8.0 + 2.0) * pixel_size),

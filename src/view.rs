@@ -106,10 +106,13 @@ pub fn help_view(_state: &EditorState) -> Element<Message> {
     let controls = vec![
         ("s", "Select tool", "copy tiles, colors, pixels"),
         ("b", "Brush tool", "paste tiles, colors, pixels"),
+        ("g", "Grid toggle", "show/hide 16x16 tile grid"),
         ("h", "Horizontal flip", "flip selection horizontally"),
         ("v", "Vertical flip", "flip selection horizontally"),
         ("t", "Tileset view", "show palettes/tilesets in side panel"),
         ("a", "Area view", "show secondary area in side panel"),
+        ("-", "Zoom out", "zoom out area views"),
+        ("=", "Zoom in", "zoom in area views"),
     ];
     let mut col = Column::new();
     col = col.push(text("Essential keyboard controls:"));

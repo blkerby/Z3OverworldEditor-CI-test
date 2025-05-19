@@ -45,6 +45,24 @@ pub fn settings_view(state: &EditorState) -> Element<Message> {
             .spacing(10)
             .align_y(Vertical::Center),
             row![
+                text("Grid alpha").width(100),
+                slider(
+                    0.01..=1.0,
+                    state.global_config.grid_alpha,
+                    Message::SetGridAlpha
+                )
+                .step(0.01)
+                .width(Length::Fill),
+                number_input(
+                    &((state.global_config.grid_alpha * 100.0).round() as u8),
+                    1..=100,
+                    |x| { Message::SetGridAlpha(x as f32 / 100.0) }
+                )
+                .width(60),
+            ]
+            .spacing(10)
+            .align_y(Vertical::Center),
+            row![
                 button("Close")
                     .style(button::secondary)
                     .on_press(Message::CloseDialogue),

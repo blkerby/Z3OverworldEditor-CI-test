@@ -28,6 +28,7 @@ pub enum Message {
     SettingsDialogue,
     HelpDialogue,
     SetPixelSize(f32),
+    SetGridAlpha(f32),
     CloseDialogue,
     ImportDialogue,
     ImportConfirm(Option<PathBuf>),

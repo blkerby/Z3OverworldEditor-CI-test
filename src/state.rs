@@ -60,6 +60,8 @@ pub struct GlobalConfig {
     pub project_dir: Option<PathBuf>,
     #[serde(default = "default_pixel_size")]
     pub pixel_size: f32,
+    #[serde(default = "default_grid_alpha")]
+    pub grid_alpha: f32,
 }
 
 pub const MIN_PIXEL_SIZE: f32 = 1.0;
@@ -67,6 +69,10 @@ pub const MAX_PIXEL_SIZE: f32 = 8.0;
 
 fn default_pixel_size() -> f32 {
     3.0
+}
+
+fn default_grid_alpha() -> f32 {
+    0.1
 }
 
 #[derive(Clone, Copy, Serialize_repr, Deserialize_repr, Default, Debug, PartialEq, Eq)]
@@ -320,6 +326,7 @@ pub struct EditorState {
     pub end_coords: Option<(TileCoord, TileCoord)>,
     pub selected_tile_block: TileBlock,
     pub selected_gfx: Vec<Vec<Tile>>,
+    pub show_grid: bool,
 
     // Filesystem watch (to detect externa modifications)
     pub watcher: Option<notify::RecommendedWatcher>,
@@ -497,11 +504,7 @@ pub fn ensure_palettes_non_empty(state: &mut EditorState) {
 pub fn get_initial_state() -> Result<EditorState> {
     let mut state = EditorState {
         global_config_path: get_global_config_path()?,
-        global_config: GlobalConfig {
-            modified: false,
-            project_dir: None,
-            pixel_size: 3.0,
-        },
+        global_config: GlobalConfig::default(),
         rom_path: None,
         palettes: vec![],
         areas: HashMap::new(),
@@ -531,6 +534,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         end_coords: None,
         selected_tile_block: TileBlock::default(),
         selected_gfx: vec![],
+        show_grid: false,
         pixel_coords: None,
         watcher: None,
         watch_enabled: false,

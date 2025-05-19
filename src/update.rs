@@ -394,6 +394,9 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                         "s" => {
                             state.brush_mode = false;
                         }
+                        "g" => {
+                            state.show_grid = !state.show_grid;
+                        }
                         "t" => {
                             state.side_panel_view = SidePanelView::Tileset;
                         }
@@ -519,6 +522,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
         }
         &Message::SetPixelSize(pixel_size) => {
             state.global_config.pixel_size = pixel_size;
+            state.global_config.modified = true;
+        }
+        &Message::SetGridAlpha(grid_alpha) => {
+            state.global_config.grid_alpha = grid_alpha;
             state.global_config.modified = true;
         }
         Message::CloseDialogue => {

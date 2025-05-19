@@ -31,6 +31,7 @@ pub fn get_undo_action(state: &EditorState, message: &Message) -> Result<UndoAct
         Message::SettingsDialogue => UndoAction::None,
         Message::HelpDialogue => UndoAction::None,
         Message::SetPixelSize(_) => UndoAction::None,
+        Message::SetGridAlpha(_) => UndoAction::None,
         Message::CloseDialogue => UndoAction::None,
         Message::ImportDialogue => UndoAction::None,
         Message::ImportConfirm(_) => UndoAction::None,
