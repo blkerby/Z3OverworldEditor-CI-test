@@ -1926,6 +1926,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 
 [[package]]
+name = "heuristic-graph-coloring"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49b668274fa5581eb527cef09a3e33028f8edee0faa6fa7853eff3271f0030f7"
+
+[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5549,6 +5555,7 @@ dependencies = [
  "env_logger",
  "glob",
  "hashbrown 0.15.3",
+ "heuristic-graph-coloring",
  "iced",
  "iced_aw",
  "iced_fonts 0.2.1",
