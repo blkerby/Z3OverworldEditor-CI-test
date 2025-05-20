@@ -9,7 +9,7 @@ use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{ColorIdx, ColorRGB, EditorState, PaletteId, PixelCoord, Tile, TileIdx},
+    state::{ColorIdx, ColorRGB, EditorState, PaletteId, PixelCoord, Tile, TileIdx, Tool},
 };
 
 #[derive(Debug)]
@@ -22,8 +22,8 @@ struct GraphicsBox {
     pixel_coords: Option<(PixelCoord, PixelCoord)>,
     pixel_size: f32,
     thickness: f32,
-    brush_mode: bool,
     color_selected: bool,
+    tool: Tool,
 }
 
 #[derive(Default)]
@@ -75,7 +75,7 @@ impl canvas::Program<Message> for GraphicsBox {
             if x < 0 || x >= 8 || y < 0 || y >= 8 {
                 return (canvas::event::Status::Ignored, None);
             }
-            if self.brush_mode {
+            if self.tool == Tool::Brush {
                 if let Some(color_idx) = self.color_idx {
                     return (
                         canvas::event::Status::Captured,
@@ -163,7 +163,7 @@ impl canvas::Program<Message> for GraphicsBox {
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if self.brush_mode && cursor.is_over(bounds) && self.color_selected {
+        if self.tool == Tool::Brush && cursor.is_over(bounds) && self.color_selected {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::default()
@@ -180,86 +180,88 @@ pub fn graphics_view(state: &EditorState) -> Element<Message> {
     if let Some(idx) = state.tile_idx {
         let tile = pal.tiles[idx as usize];
         let label_width = 105;
-        col = col.push(row![
-            column![
-                row![
-                    text("Tile number").width(label_width),
-                    text(format!("${:02X} ({})", idx, idx)),
+        col = col
+            .push(row![
+                column![
+                    row![
+                        text("Tile number").width(label_width),
+                        text(format!("${:02X} ({})", idx, idx)),
+                    ]
+                    .align_y(Vertical::Center),
+                    row![
+                        text("Priority").width(label_width),
+                        pick_list(
+                            ["No", "Yes"],
+                            Some(if tile.priority { "Yes" } else { "No" }),
+                            move |x| Message::SetTilePriority {
+                                palette_id: pal_id,
+                                tile_idx: idx,
+                                priority: x == "Yes"
+                            }
+                        )
+                        .text_size(12)
+                    ]
+                    .align_y(Vertical::Center),
+                    row![
+                        text("Collision").width(label_width),
+                        number_input(&tile.collision, 0..=255, move |x| {
+                            Message::SetTileCollision {
+                                palette_id: pal_id,
+                                tile_idx: idx,
+                                collision: x,
+                            }
+                        })
+                        .width(60),
+                    ]
+                    .align_y(Vertical::Center),
+                    row![
+                        text("H-flippable").width(label_width),
+                        pick_list(
+                            ["No", "Yes"],
+                            Some(if tile.h_flippable { "Yes" } else { "No" }),
+                            move |x| Message::SetTileHFlippable {
+                                palette_id: pal_id,
+                                tile_idx: idx,
+                                h_flippable: x == "Yes"
+                            }
+                        )
+                        .text_size(12)
+                    ]
+                    .align_y(Vertical::Center),
+                    row![
+                        text("V-flippable").width(label_width),
+                        pick_list(
+                            ["No", "Yes"],
+                            Some(if tile.v_flippable { "Yes" } else { "No" }),
+                            move |x| Message::SetTileVFlippable {
+                                palette_id: pal_id,
+                                tile_idx: idx,
+                                v_flippable: x == "Yes"
+                            }
+                        )
+                        .text_size(12)
+                    ]
+                    .align_y(Vertical::Center),
                 ]
-                .align_y(Vertical::Center),
-                row![
-                    text("Priority").width(label_width),
-                    pick_list(
-                        ["No", "Yes"],
-                        Some(if tile.priority { "Yes" } else { "No" }),
-                        move |x| Message::SetTilePriority {
-                            palette_id: pal_id,
-                            tile_idx: idx,
-                            priority: x == "Yes"
-                        }
-                    )
-                    .text_size(12)
-                ]
-                .align_y(Vertical::Center),
-                row![
-                    text("Collision").width(label_width),
-                    number_input(&tile.collision, 0..=255, move |x| {
-                        Message::SetTileCollision {
-                            palette_id: pal_id,
-                            tile_idx: idx,
-                            collision: x,
-                        }
-                    })
-                    .width(60),
-                ]
-                .align_y(Vertical::Center),
-                row![
-                    text("H-flippable").width(label_width),
-                    pick_list(
-                        ["No", "Yes"],
-                        Some(if tile.h_flippable { "Yes" } else { "No" }),
-                        move |x| Message::SetTileHFlippable {
-                            palette_id: pal_id,
-                            tile_idx: idx,
-                            h_flippable: x == "Yes"
-                        }
-                    )
-                    .text_size(12)
-                ]
-                .align_y(Vertical::Center),
-                row![
-                    text("V-flippable").width(label_width),
-                    pick_list(
-                        ["No", "Yes"],
-                        Some(if tile.v_flippable { "Yes" } else { "No" }),
-                        move |x| Message::SetTileVFlippable {
-                            palette_id: pal_id,
-                            tile_idx: idx,
-                            v_flippable: x == "Yes"
-                        }
-                    )
-                    .text_size(12)
-                ]
-                .align_y(Vertical::Center),
-            ]
-            .spacing(12)
-            .padding([5, 15]),
-            horizontal_space(),
-            canvas(GraphicsBox {
-                colors: pal.colors,
-                tile,
-                palette_id: pal_id,
-                tile_idx: idx,
-                color_idx: state.color_idx,
-                pixel_coords: state.pixel_coords,
-                pixel_size: 24.0,
-                thickness: 1.0,
-                brush_mode: state.brush_mode,
-                color_selected: state.color_idx.is_some(),
-            })
-            .width(24 * 8 + 2)
-            .height(24 * 8 + 4)
-        ]).padding([10, 0]);
+                .spacing(12)
+                .padding([5, 15]),
+                horizontal_space(),
+                canvas(GraphicsBox {
+                    colors: pal.colors,
+                    tile,
+                    palette_id: pal_id,
+                    tile_idx: idx,
+                    color_idx: state.color_idx,
+                    pixel_coords: state.pixel_coords,
+                    pixel_size: 24.0,
+                    thickness: 1.0,
+                    color_selected: state.color_idx.is_some(),
+                    tool: state.tool,
+                })
+                .width(24 * 8 + 2)
+                .height(24 * 8 + 4)
+            ])
+            .padding([10, 0]);
     }
     col.into()
 }

@@ -12,7 +12,7 @@ use iced::{
 use crate::{
     helpers::{alpha_blend, scale_color},
     message::{Message, SelectionSource},
-    state::{ColorIdx, EditorState, Palette, Tile, TileCoord},
+    state::{ColorIdx, EditorState, Palette, Tile, TileCoord, Tool},
 };
 
 // We use two separate canvases: one for drawing the tile raster and one for the tile selection.
@@ -25,9 +25,9 @@ struct TileGrid<'a> {
     end_coords: Option<(TileCoord, TileCoord)>,
     selected_gfx: &'a Vec<Vec<Tile>>,
     thickness: f32,
-    brush_mode: bool,
     identify_color: bool,
     color_idx: Option<ColorIdx>,
+    tool: Tool,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -80,7 +80,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(btn @ (mouse::Button::Left | mouse::Button::Right)) => {
                     if let Some(p) = cursor.position_over(bounds) {
-                        if self.brush_mode && btn == mouse::Button::Left {
+                        if self.tool == Tool::Brush && btn == mouse::Button::Left {
                             state.action = InternalStateAction::Brushing;
                             let coords = clamped_position_in(
                                 p,
@@ -252,7 +252,7 @@ impl<'a> canvas::Program<Message> for TileGrid<'a> {
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if self.brush_mode && cursor.is_over(bounds) {
+        if self.tool == Tool::Brush && cursor.is_over(bounds) {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::default()
@@ -384,9 +384,9 @@ pub fn tile_view(state: &EditorState, size: Size, reserved_height: f32) -> Eleme
                     end_coords: state.end_coords,
                     selected_gfx: &state.selected_gfx,
                     thickness: 1.0,
-                    brush_mode: state.brush_mode,
                     identify_color: state.identify_color,
                     color_idx: state.color_idx,
+                    tool: state.tool,
                 })
                 .width(384 + 4)
                 .height((num_rows * 8 * pixel_size + 4) as f32),

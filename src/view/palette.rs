@@ -11,7 +11,7 @@ use iced_aw::number_input;
 
 use crate::{
     message::Message,
-    state::{ColorIdx, ColorRGB, EditorState, Focus, PaletteId, PaletteIdx},
+    state::{ColorIdx, ColorRGB, EditorState, Focus, PaletteId, PaletteIdx, Tool},
 };
 
 use super::modal_background_style;
@@ -23,11 +23,11 @@ struct ColorBox {
     b: f32,
     thickness: f32,
     selected: bool,
-    brush_mode: bool,
     color_idx: ColorIdx,
     palette_id: PaletteId,
     palette_idx: PaletteIdx,
     selected_color: ColorRGB,
+    tool: Tool,
 }
 
 impl canvas::Program<Message> for ColorBox {
@@ -50,7 +50,7 @@ impl canvas::Program<Message> for ColorBox {
                 mouse::Event::ButtonPressed(button) => {
                     let message = match button {
                         mouse::Button::Left => {
-                            if self.brush_mode {
+                            if self.tool == Tool::Brush {
                                 Some(Message::BrushColor {
                                     palette_id: self.palette_id,
                                     color_idx: self.color_idx,
@@ -129,7 +129,7 @@ impl canvas::Program<Message> for ColorBox {
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if self.brush_mode && cursor.is_over(bounds) {
+        if self.tool == Tool::Brush && cursor.is_over(bounds) {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::default()
@@ -157,11 +157,11 @@ pub fn selected_palette_view(state: &EditorState) -> Element<Message> {
                 b: pal.colors[i][2] as f32 / 31.0,
                 thickness: 2.0,
                 selected: Some(i as ColorIdx) == state.color_idx,
-                brush_mode: state.brush_mode,
                 color_idx: i as ColorIdx,
                 palette_id: state.palettes[state.palette_idx].id,
                 palette_idx: state.palette_idx,
                 selected_color: state.selected_color,
+                tool: state.tool,
             })
             .width(size)
             .height(size),
@@ -333,11 +333,11 @@ pub fn used_palettes_view(state: &EditorState) -> Element<Message> {
                     thickness: 1.0,
                     selected: state.palette_idx == palette_idx
                         && Some(i as ColorIdx) == state.color_idx,
-                    brush_mode: state.brush_mode,
                     color_idx: i as ColorIdx,
                     palette_id: state.palettes[palette_idx].id,
                     palette_idx,
                     selected_color: state.selected_color,
+                    tool: state.tool,
                 })
                 .width(size)
                 .height(size),

@@ -282,6 +282,13 @@ pub enum AreaPosition {
     Side,
 }
 
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub enum Tool {
+    #[default]
+    Select,
+    Brush,
+}
+
 pub struct EditorState {
     pub global_config_path: PathBuf,
     pub global_config: GlobalConfig,
@@ -302,7 +309,7 @@ pub struct EditorState {
 
     // General editing state:
     pub focus: Focus,
-    pub brush_mode: bool,
+    pub tool: Tool,
     pub palette_only_brush: bool,
     pub side_panel_view: SidePanelView,
 
@@ -521,7 +528,7 @@ pub fn get_initial_state() -> Result<EditorState> {
         theme_names: vec![],
         undo_stack: vec![],
         redo_stack: vec![],
-        brush_mode: false,
+        tool: Tool::default(),
         palette_only_brush: false,
         side_panel_view: SidePanelView::default(),
         focus: Focus::None,

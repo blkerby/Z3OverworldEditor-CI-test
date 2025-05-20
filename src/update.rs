@@ -13,8 +13,7 @@ use crate::{
         rename_area, rename_area_theme, save_area, save_area_png,
     },
     state::{
-        Area, AreaId, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen,
-        SidePanelView, Tile, TileBlock, TileIdx, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE,
+        Area, AreaId, AreaPosition, Dialogue, EditorState, Flip, Focus, PaletteId, Screen, SidePanelView, Tile, TileBlock, TileIdx, Tool, MAX_PIXEL_SIZE, MIN_PIXEL_SIZE
     },
     undo::{get_undo_action, UndoAction},
     view::{open_project, open_rom},
@@ -154,7 +153,7 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 key: keyboard::Key::Named(key::Named::Escape),
                 ..
             }) => {
-                state.brush_mode = false;
+                state.tool = Tool::Select;
                 state.dialogue = None;
                 state.color_idx = None;
                 state.tile_idx = None;
@@ -395,10 +394,10 @@ pub fn try_update(state: &mut EditorState, message: &Message) -> Result<Option<T
                 } else {
                     match c.as_str() {
                         "b" => {
-                            state.brush_mode = true;
+                            state.tool = Tool::Brush;
                         }
                         "s" => {
-                            state.brush_mode = false;
+                            state.tool = Tool::Select;
                         }
                         "g" => {
                             state.show_grid = !state.show_grid;

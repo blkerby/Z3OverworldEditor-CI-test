@@ -17,7 +17,7 @@ use crate::{
     message::{Message, SelectionSource},
     state::{
         Area, AreaId, AreaPosition, ColorIdx, EditorState, Focus, Palette, PaletteId, TileBlock,
-        TileCoord, TileIdx,
+        TileCoord, TileIdx, Tool,
     },
 };
 
@@ -36,7 +36,6 @@ struct AreaGrid<'a> {
     end_coords: Option<(TileCoord, TileCoord)>,
     pixel_size: f32,
     // thickness: f32,
-    brush_mode: bool,
     palette_only_brush: bool,
     tile_block: &'a TileBlock,
     identify_tile: bool,
@@ -44,6 +43,7 @@ struct AreaGrid<'a> {
     tile_idx: Option<TileIdx>,
     identify_color: bool,
     color_idx: Option<ColorIdx>,
+    tool: Tool,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
@@ -98,7 +98,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
             canvas::Event::Mouse(mouse_event) => match mouse_event {
                 mouse::Event::ButtonPressed(btn @ (mouse::Button::Left | mouse::Button::Right)) => {
                     if let Some(p) = cursor.position_over(bounds) {
-                        if self.brush_mode && btn == mouse::Button::Left {
+                        if self.tool == Tool::Brush && btn == mouse::Button::Left {
                             state.action = InternalStateAction::Brushing;
                             let coords =
                                 clamped_position_in(p, bounds, self.area.size, self.pixel_size);
@@ -271,7 +271,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
             }
         }
 
-        if self.brush_mode && self.end_coords.is_none() {
+        if self.tool == Tool::Brush && self.end_coords.is_none() {
             // Overlay the block to be pasted/brushed onto the area:
             if let Some(Point {
                 x: base_x,
@@ -361,7 +361,7 @@ impl<'a> canvas::Program<Message> for AreaGrid<'a> {
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if self.brush_mode && cursor.is_over(bounds) {
+        if self.tool == Tool::Brush && cursor.is_over(bounds) {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::default()
@@ -376,7 +376,7 @@ struct AreaSelect {
     right: TileCoord,
     selecting_active: bool,
     pixel_size: f32,
-    brush_mode: bool,
+    tool: Tool,
     show_grid: bool,
     grid_alpha: f32,
 }
@@ -473,8 +473,11 @@ impl canvas::Program<Message> for AreaSelect {
         bounds: iced::Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if self.brush_mode && cursor.is_over(bounds) {
-            mouse::Interaction::Crosshair
+        if cursor.is_over(bounds) {
+            match self.tool {
+                Tool::Select => mouse::Interaction::default(),
+                Tool::Brush => mouse::Interaction::Crosshair,
+            }
         } else {
             mouse::Interaction::default()
         }
@@ -513,7 +516,6 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
                 pixel_size,
                 end_coords: state.end_coords,
                 // thickness: 1.0,
-                brush_mode: state.brush_mode,
                 palette_only_brush: state.palette_only_brush,
                 tile_block: &state.selected_tile_block,
                 identify_tile: state.identify_tile,
@@ -521,6 +523,7 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
                 tile_idx: state.tile_idx,
                 identify_color: state.identify_color,
                 color_idx: state.color_idx,
+                tool: state.tool,
             })
             .width((num_cols as f32 * 8.0 + 2.0) * pixel_size)
             .height((num_rows as f32 * 8.0 + 2.0) * pixel_size),
@@ -533,7 +536,7 @@ pub fn area_grid_view(state: &EditorState, position: AreaPosition) -> Element<Me
                 top,
                 bottom,
                 pixel_size,
-                brush_mode: state.brush_mode,
+                tool: state.tool,
                 show_grid: state.show_grid,
                 grid_alpha: state.global_config.grid_alpha,
             })
